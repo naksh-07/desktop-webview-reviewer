@@ -1,0 +1,24 @@
+# Temporary process state & endpoints
+*.pid
+*.log
+desktop_ownership.json
+desktop_ws_url.txt
+qt_ws_url.txt
+
+# Generated test evidence & media
+*_evidence.json
+evidence.json
+*.png
+*.jpg
+
+# Python byte-code & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+release-validation/
+
+# Ephemeral testing directories
+.qt-reviewer/
+.agents/

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desktop-webview-reviewer"
+version = "1.0.0"
+description = "Universal desktop application webview testing, inspection, and verification capability."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Google DeepMind Advanced Agentic Coding Team" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "websockets>=11.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+qt = [
+    "PyQt6>=6.5.0",
+    "PyQt6-WebEngine>=6.5.0",
+]
+test = [
+    "unittest-xml-reporting",
+]
+
+[project.scripts]
+desktop-webview-doctor = "scripts.doctor:main"
+desktop-webview-launch = "scripts.launch:main"
+desktop-webview-discover = "scripts.discover:main"
+desktop-webview-review = "scripts.review:main"
+desktop-webview-stop = "scripts.stop:main"
+desktop-webview-attach = "scripts.attach:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "adapters*", "detectors*", "launchers*", "scripts*"]

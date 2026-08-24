@@ -1,0 +1,5 @@
+# Production runtime dependencies for desktop-webview-reviewer
+# Minimal stdlib-first architecture
+
+websockets>=11.0
+psutil>=5.9.0
