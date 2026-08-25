@@ -1,6 +1,8 @@
 """
-Automated review & verification script.
-Inspects DOM, evaluates JS, interacts with elements, captures screenshots, and produces evidence reports.
+Automated review & verification script with Windows forensic hardening.
+Inspects DOM, evaluates JS, interacts with elements, verifies native GUI identity,
+captures dual screenshot provenance, and produces forensic evidence reports with
+tripartite verdict separation (PASS, FAIL, UNVERIFIED).
 """
 
 import argparse
@@ -11,12 +13,21 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
+import time
 from typing import Optional
 
 from core.actions import WebviewActions
 from core.assertions import WebviewAssertions
 from core.evidence import EvidenceCollector
-from core.models import ProcessOwnership, Target, VerificationLevel
+from core.models import (
+    ProcessOwnership,
+    ScreenshotType,
+    Target,
+    Verdict,
+    VerificationLevel,
+    WindowForensics
+)
+from core.window_forensics import WindowForensicsEngine
 from detectors.engine_detector import EngineDetector
 
 
@@ -29,9 +40,10 @@ async def run_review(
     assert_selector: Optional[str] = None,
     assert_text_expected: Optional[str] = None,
     screenshot_path: str = "screenshot.png",
+    native_screenshot_path: Optional[str] = None,
     evidence_path: str = "evidence.json",
     ownership_file: str = "desktop_ownership.json"
-):
+) -> int:
     adapter = EngineDetector.resolve_adapter(engine_name_or_hint=engine_name)
     engine_info = adapter.get_engine_info()
 
@@ -45,19 +57,19 @@ async def run_review(
         websocket_endpoint=ws_url
     )
 
-    print("\n" + "=" * 60)
-    print("=== Universal Desktop WebView Automated Review ===")
-    print("=" * 60)
+    print("\n" + "=" * 65)
+    print("=== Universal Desktop WebView Hardened Forensic Review ===")
+    print("=" * 65)
     print(f"Connecting reviewer to: {ws_url}")
     print(f"Engine: {adapter.engine_name} | Framework: {engine_info.framework or 'native'}")
 
     current_stage = "attach"
-    ownership_file = "desktop_ownership.json"
     launch_mode = "launched_by_reviewer" if os.path.exists(ownership_file) else "attached_external"
     conf_str = engine_info.confidence.value if hasattr(engine_info.confidence, "value") else str(engine_info.confidence)
 
-    # Process ownership metadata
+    # 1. Process ownership & subtree resolution
     proc_ownership: Optional[ProcessOwnership] = None
+    target_pids = set()
     if os.path.exists(ownership_file):
         try:
             with open(ownership_file, "r", encoding="utf-8") as f:
@@ -69,10 +81,13 @@ async def run_review(
                     command=data.get("command"),
                     port=data.get("port", 9222)
                 )
+                if proc_ownership.pid:
+                    target_pids = WindowForensicsEngine.get_process_tree_pids(proc_ownership.pid)
         except Exception:
             pass
 
     session = None
+    window_forensics: Optional[WindowForensics] = None
     try:
         current_stage = "attach"
         session = await adapter.attach(target)
@@ -80,7 +95,7 @@ async def run_review(
         assertions = adapter.create_assertions(session)
         collector = adapter.create_evidence_collector(session)
 
-        # 1. Inspect title and url
+        # 2. Inspect target title and URL
         current_stage = "inspection"
         title = await session.evaluate_js("document.title")
         url = await session.evaluate_js("window.location.href")
@@ -88,23 +103,68 @@ async def run_review(
         target.url = str(url or "")
         print(f"Target Title: '{target.title}' | URL: '{target.url}'")
 
-        # Session Diagnostics
-        print("\nSession Diagnostics:")
+        # 3. Native Windows GUI Forensic Inspection
+        current_stage = "gui_forensics"
+        if sys.platform == "win32" and proc_ownership and proc_ownership.pid:
+            proc_info = WindowForensicsEngine.get_process_info(proc_ownership.pid)
+            gui_win = WindowForensicsEngine.get_primary_gui_window(
+                proc_ownership.pid, expected_title_substring=target.title
+            )
+
+            port_ok, listening_pid, port_msg = WindowForensicsEngine.verify_port_listening_process(
+                proc_ownership.port, target_pids
+            )
+
+            if gui_win:
+                window_forensics = WindowForensics(
+                    hwnd=gui_win.get("hwnd"),
+                    pid=gui_win.get("pid"),
+                    executable=proc_info.get("executable"),
+                    cmdline=proc_info.get("cmdline") or [],
+                    window_title=gui_win.get("title", ""),
+                    class_name=gui_win.get("class_name", ""),
+                    window_visible=gui_win.get("is_visible", False),
+                    is_iconic=gui_win.get("is_iconic", False),
+                    is_cloaked=gui_win.get("is_cloaked", False),
+                    is_real_gui=gui_win.get("is_real_gui", False),
+                    geometry=gui_win.get("geometry", {}),
+                    hwnd_pid_matched=(gui_win.get("pid") in target_pids),
+                    notes=[port_msg]
+                )
+            else:
+                window_forensics = WindowForensics(
+                    hwnd=None,
+                    pid=proc_ownership.pid,
+                    executable=proc_info.get("executable"),
+                    cmdline=proc_info.get("cmdline") or [],
+                    window_visible=False,
+                    is_real_gui=False,
+                    hwnd_pid_matched=False,
+                    notes=["No top-level window found for process tree", port_msg]
+                )
+
+        # 4. Session Diagnostics Output
+        print("\nSession Forensics:")
         print(f"  Detected framework: {engine_info.framework or 'native'}")
         print(f"  Detected engine:    {adapter.engine_name}")
         print(f"  Confidence:         {conf_str.upper()}")
         print(f"  Platform:           {sys.platform}")
         print(f"  Launch mode:        {launch_mode}")
-        print(f"  Selected Target:    {target.title or target.id} (URL: {target.url})")
+        if window_forensics:
+            print(f"  Native HWND:        {window_forensics.hwnd}")
+            print(f"  Window Title:       '{window_forensics.window_title}'")
+            print(f"  Window Visible:     {window_forensics.window_visible} (Iconic={window_forensics.is_iconic}, Cloaked={window_forensics.is_cloaked})")
+            print(f"  Window Geometry:    {window_forensics.geometry}")
+            print(f"  PID Matched:        {window_forensics.hwnd_pid_matched} (Process Tree: {sorted(list(target_pids))})")
+        print(f"  Selected Target:    '{target.title or target.id}' (URL: {target.url})")
         print(f"  Connection method:  CDP WebSocket ({ws_url[:45]}...)")
-        print(f"  Verification Level: RUNTIME_VERIFIED")
 
-        # 2. Basic environment assertions
+        # 5. Environment & DOM assertions
         current_stage = "environment_assertion"
         await assertions.assert_js("1 + 1", 2, "JavaScript Runtime Arithmetic Test")
         await assertions.assert_exists("body", "Document Body Presence")
 
-        # 3. Optional interactive actions
+        # 6. Optional interactive actions
         if type_selector and type_text:
             current_stage = "input_interaction"
             print(f"\nExecuting input: typing '{type_text}' into '{type_selector}'...")
@@ -124,23 +184,33 @@ async def run_review(
             current_stage = "ui_assertion"
             print(f"\nExecuting assertion on selector '{assert_selector}'...")
             if assert_text_expected is not None:
-                await assertions.assert_text_contains(assert_selector, assert_text_expected, f"Element '{assert_selector}' contains '{assert_text_expected}'")
+                await assertions.assert_text_contains(
+                    assert_selector, assert_text_expected, f"Element '{assert_selector}' contains '{assert_text_expected}'"
+                )
             else:
                 await assertions.assert_exists(assert_selector, f"Element '{assert_selector}' exists")
 
-        # 4. Capture screenshot & validate PNG header
+        # 7. Screenshot Provenance Capture
         current_stage = "screenshot_capture"
-        print(f"\nCapturing screenshot to '{screenshot_path}'...")
-        sha256 = await collector.capture_screenshot_file(screenshot_path)
-        print(f"Screenshot verified (SHA-256: {sha256})")
+        print(f"\nCapturing CDP webview screenshot to '{screenshot_path}'...")
+        cdp_hash, cdp_meta = await collector.capture_cdp_screenshot(screenshot_path, key="webview")
+        print(f"  [+] CDP Webview Screenshot: {screenshot_path} (SHA-256: {cdp_hash})")
 
-        # 5. Build and save evidence report
+        if window_forensics and window_forensics.hwnd and window_forensics.window_visible and not window_forensics.is_iconic:
+            nat_path = native_screenshot_path or "screenshot_native.png"
+            print(f"Capturing native desktop OS window screenshot to '{nat_path}'...")
+            ok, nat_hash, nat_meta = collector.capture_native_screenshot(window_forensics.hwnd, nat_path, key="native")
+            if ok:
+                print(f"  [+] Native Desktop Screenshot: {nat_path} (SHA-256: {nat_hash})")
+
+        # 8. Build and save forensic evidence report
         current_stage = "evidence_generation"
         report = await collector.build_report(
             screenshot_path=screenshot_path,
             assertions=[r.to_dict() for r in assertions.history],
             actions=actions.history,
             process_ownership=proc_ownership,
+            window_forensics=window_forensics,
             diagnostics={
                 "framework": engine_info.framework or "native",
                 "engine": adapter.engine_name,
@@ -148,24 +218,37 @@ async def run_review(
                 "platform": sys.platform,
                 "target_url": target.url,
                 "target_title": target.title
-            },
-            verification_level=VerificationLevel.RUNTIME_VERIFIED
+            }
         )
         collector.save_report_json(report, evidence_path)
-        print(f"Evidence report written to '{evidence_path}'")
+        print(f"\nEvidence report written to '{evidence_path}'")
 
-        print("\n" + "=" * 60)
-        print("=== Review Summary ===")
+        # 9. Tripartite Verdict Summary Output
+        print("\n" + "=" * 65)
+        print("=== Forensics Verdict Summary ===")
+        print(f"Verdict:           {report.verdict.value}")
+        print(f"Verdict Reason:    {report.verdict_reason}")
+        print(f"Verification Level:{report.verification_level.value if hasattr(report.verification_level, 'value') else report.verification_level}")
         print(f"Assertions Passed: {sum(1 for r in assertions.history if r.passed)} / {len(assertions.history)}")
         print(f"Actions Executed:  {len(actions.history)}")
         print(f"Console Messages:  {len(session.console_events)}")
-        print("Verification:      RUNTIME_VERIFIED")
-        print("=" * 60)
+        print(f"Screenshots Taken: {len(report.screenshots)}")
+        for sname, smeta in report.screenshots.items():
+            print(f"  - [{sname}] ({smeta.screenshot_type}): {smeta.path} (SHA-256: {smeta.screenshot_hash[:16]}...)")
+        print("=" * 65)
+
+        if report.verdict == Verdict.PASS:
+            return 0
+        elif report.verdict == Verdict.UNVERIFIED:
+            return 2
+        else:
+            return 1
 
     except Exception as e:
         suggestions = {
             "attach": "Verify WebSocket endpoint is active and not already owned/locked by another inspector session.",
             "inspection": "Check if page finished initial loading and DOM is accessible.",
+            "gui_forensics": "Inspect Windows process tree and top-level HWND handles.",
             "environment_assertion": "Verify JavaScript execution is enabled in target webview settings.",
             "input_interaction": f"Check if selector '{type_selector}' exists in current DOM and is visible/editable.",
             "click_interaction": f"Check if selector '{click_selector}' exists and has non-zero geometry on screen.",
@@ -189,14 +272,14 @@ async def run_review(
         print(f"Reason:              {type(e).__name__}: {str(e)}")
         print(f"Suggested next diagnostic: {tip}")
         print("======================================================\n")
-        raise
+        return 1
     finally:
         if session:
             await adapter.detach(session)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Universal Desktop WebView Automated Reviewer")
+    parser = argparse.ArgumentParser(description="Universal Desktop WebView Hardened Forensic Reviewer")
     parser.add_argument("--engine", default="auto", help="Engine name (default: 'auto')")
     parser.add_argument("--ws-url", default=None, help="Explicit WebSocket URL")
     parser.add_argument("--ws-file", default="desktop_ws_url.txt", help="File containing WebSocket URL")
@@ -205,7 +288,8 @@ def main():
     parser.add_argument("--type-text", default=None, help="Text to type into type-selector")
     parser.add_argument("--assert-selector", default=None, help="CSS selector to assert on")
     parser.add_argument("--assert-text", default=None, help="Expected text in assert-selector")
-    parser.add_argument("--screenshot", default="screenshot.png", help="Output screenshot path")
+    parser.add_argument("--screenshot", default="screenshot.png", help="Output CDP webview screenshot path")
+    parser.add_argument("--native-screenshot", default=None, help="Output native OS window screenshot path")
     parser.add_argument("--evidence", default="evidence.json", help="Output evidence JSON path")
     parser.add_argument("--ownership-file", default="desktop_ownership.json", help="Process ownership file")
 
@@ -227,7 +311,7 @@ def main():
         print("Error: Empty WebSocket URL.")
         sys.exit(1)
 
-    asyncio.run(run_review(
+    exit_code = asyncio.run(run_review(
         ws_url=ws_url,
         engine_name=args.engine,
         click_selector=args.click,
@@ -236,11 +320,12 @@ def main():
         assert_selector=args.assert_selector,
         assert_text_expected=args.assert_text,
         screenshot_path=args.screenshot,
+        native_screenshot_path=args.native_screenshot,
         evidence_path=args.evidence,
         ownership_file=args.ownership_file
     ))
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
     main()
-

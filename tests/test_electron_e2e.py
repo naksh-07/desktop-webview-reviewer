@@ -52,12 +52,10 @@ class TestElectronRealRuntimeE2E(unittest.TestCase):
         self.assertIsNotNone(adapter)
         self.assertEqual(adapter.engine_name, "electron")
 
-        cmd = [
-            self.npx_cmd,
-            "electron",
-            os.path.join(self.fixture_dir, "main.js"),
-            f"--remote-debugging-port={self.port}"
-        ]
+        if sys.platform == "win32" and self.npx_cmd.lower().endswith((".cmd", ".bat")):
+            cmd = ["cmd.exe", "/c", self.npx_cmd, "electron", os.path.join(self.fixture_dir, "main.js"), f"--remote-debugging-port={self.port}"]
+        else:
+            cmd = [self.npx_cmd, "electron", os.path.join(self.fixture_dir, "main.js"), f"--remote-debugging-port={self.port}"]
 
         self.proc = subprocess.Popen(
             cmd,

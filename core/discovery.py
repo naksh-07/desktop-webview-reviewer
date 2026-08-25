@@ -1,5 +1,5 @@
 """
-Universal target discovery and endpoint querying.
+Universal target discovery, endpoint querying, and runtime process correlation.
 """
 
 import json
@@ -7,15 +7,16 @@ import logging
 import time
 import urllib.error
 import urllib.request
-from typing import List, Optional
+from typing import List, Optional, Set, Tuple
 
 from .models import Target, TargetCriteria
+from .window_forensics import WindowForensicsEngine
 
 logger = logging.getLogger("desktop_webview.discovery")
 
 
 class TargetDiscovery:
-    """Discovers and queries inspectable targets from a remote debugging endpoint."""
+    """Discovers, queries, and correlates inspectable targets from a remote debugging endpoint."""
 
     @staticmethod
     def query_targets(host: str = "127.0.0.1", port: int = 9222, engine: str = "generic") -> List[Target]:
@@ -66,6 +67,13 @@ class TargetDiscovery:
                 return targets
             time.sleep(interval)
         return []
+
+    @staticmethod
+    def verify_port_ownership(port: int, expected_pids: Set[int]) -> Tuple[bool, Optional[int], str]:
+        """
+        Verifies that the process listening on `port` belongs to the expected process tree.
+        """
+        return WindowForensicsEngine.verify_port_listening_process(port, expected_pids)
 
     IGNORED_URL_PREFIXES = (
         "devtools://",
@@ -229,4 +237,3 @@ class TargetDiscovery:
         # Ultimate fallback
         logger.warning("No ideal application target found; returning first available target.")
         return targets[0]
-

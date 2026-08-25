@@ -94,7 +94,7 @@ def check_core_subsystems() -> Dict[str, Any]:
     all_passed = True
 
     try:
-        from core.models import CapabilityName, CapabilityStatus, EngineInfo, Target, VerificationLevel
+        from core.models import CapabilityName, CapabilityStatus, EngineInfo, Target, VerificationLevel, Verdict, ScreenshotType, WindowForensics
         from core.capabilities import CapabilityRegistry
         from core.session import CDPSession, MultiTargetSessionManager
         from core.discovery import TargetDiscovery
@@ -102,6 +102,7 @@ def check_core_subsystems() -> Dict[str, Any]:
         from core.assertions import WebviewAssertions
         from core.evidence import EvidenceCollector, PNG_MAGIC_BYTES
         from core.cleanup import ProcessCleanup
+        from core.window_forensics import WindowForensicsEngine
         from launchers.process_launcher import ProcessLauncher
         from detectors.engine_detector import EngineDetector, FrameworkRouter
         from adapters import list_adapters, get_adapter
@@ -121,6 +122,7 @@ def check_core_subsystems() -> Dict[str, Any]:
         else:
             subsystems["evidence"] = {"status": "PASS", "message": "PNG validation intact"}
 
+        subsystems["forensics"] = {"status": "PASS", "message": "Win32 GUI forensics engine ready"}
         subsystems["imports"] = {"status": "PASS", "message": "All core modules imported successfully"}
     except Exception as e:
         all_passed = False
