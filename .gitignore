@@ -22,3 +22,11 @@ release-validation/
 # Ephemeral testing directories
 .qt-reviewer/
 .agents/
+
+# Compiled binaries and .NET build artifacts
+*.exe
+bin/
+obj/
+*.egg-info/
+
+

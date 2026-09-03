@@ -49,4 +49,5 @@ desktop-webview-attach = "scripts.attach:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "adapters*", "detectors*", "launchers*", "scripts*"]
+include = ["core*", "adapters*", "detectors*", "launchers*", "scripts*", "runtime*"]
+
