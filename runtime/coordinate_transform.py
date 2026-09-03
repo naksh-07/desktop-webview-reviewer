@@ -1,14 +1,16 @@
 """
 Authoritative Coordinate Transformation Subsystem for Desktop WebView Reviewer.
 Single authority for all coordinate translations across webview CSS, native client,
-physical screen, and normalized SendInput coordinates. Grounded in SP-03 empirical findings.
+physical screen, and normalized SendInput coordinates.
+Supports Per-Monitor V2 scaling (100%, 125%, 150%, 175%, 200%), negative multi-monitor origins,
+and deterministic multi-display topology simulation. Grounded in SP-03 empirical findings.
 """
 
 from __future__ import annotations
 import math
 import sys
-from dataclasses import dataclass
-from typing import Dict, Any, Tuple, Optional
+from dataclasses import dataclass, field
+from typing import Dict, Any, Tuple, Optional, List
 from runtime.references import Rect
 from runtime.errors import InvalidCoordinateSpaceException
 
@@ -35,8 +37,61 @@ class VirtualScreenBounds:
     def bottom(self) -> int:
         return self.top + self.height
 
+    def contains_point(self, x: int, y: int) -> bool:
+        return self.left <= x < self.right and self.top <= y < self.bottom
+
     def to_dict(self) -> Dict[str, int]:
         return {"left": self.left, "top": self.top, "width": self.width, "height": self.height}
+
+
+@dataclass(frozen=True)
+class MonitorDescriptor:
+    """Descriptor for an individual physical or simulated display monitor."""
+    monitor_id: str
+    bounds: Rect
+    is_primary: bool = False
+    dpi_scale: float = 1.0
+
+    def contains_point(self, x: int, y: int) -> bool:
+        return (
+            self.bounds.x <= x < self.bounds.x + self.bounds.width
+            and self.bounds.y <= y < self.bounds.y + self.bounds.height
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "monitor_id": self.monitor_id,
+            "bounds": self.bounds.to_dict(),
+            "is_primary": self.is_primary,
+            "dpi_scale": self.dpi_scale,
+        }
+
+
+@dataclass(frozen=True)
+class MultiMonitorTopology:
+    """Topology describing multi-monitor arrangement and bounding virtual screen."""
+    monitors: List[MonitorDescriptor]
+    virtual_screen: VirtualScreenBounds
+
+    def get_monitor_for_point(self, x: int, y: int) -> Optional[MonitorDescriptor]:
+        """Resolves which display monitor owns the given physical screen point."""
+        for m in self.monitors:
+            if m.contains_point(x, y):
+                return m
+        return None
+
+    def get_primary_monitor(self) -> Optional[MonitorDescriptor]:
+        """Returns the designated primary monitor."""
+        for m in self.monitors:
+            if m.is_primary:
+                return m
+        return self.monitors[0] if self.monitors else None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "monitors": [m.to_dict() for m in self.monitors],
+            "virtual_screen": self.virtual_screen.to_dict(),
+        }
 
 
 @dataclass(frozen=True)
@@ -52,7 +107,8 @@ class CoordinateTransformer:
     """
     Authoritative deterministic coordinate transformation engine.
     Ensures consistent mapping between webview CSS pixels, native client pixels,
-    physical display pixels, and SendInput normalized 0..65535 units.
+    physical display pixels, and SendInput normalized 0..65535 units across
+    single and multi-monitor configurations with negative coordinates.
     """
 
     @staticmethod
@@ -60,14 +116,14 @@ class CoordinateTransformer:
         """Queries Win32 system metrics for the bounding virtual desktop."""
         if sys.platform == "win32":
             try:
-                import ctypes
-                user32 = ctypes.windll.user32
-                x = user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
-                y = user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
-                w = user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
-                h = user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
-                if w > 0 and h > 0:
-                    return VirtualScreenBounds(left=x, top=y, width=w, height=h)
+                import runtime.win32 as w32
+                if w32.user32 is not None:
+                    x = w32.user32.GetSystemMetrics(SM_XVIRTUALSCREEN)
+                    y = w32.user32.GetSystemMetrics(SM_YVIRTUALSCREEN)
+                    w = w32.user32.GetSystemMetrics(SM_CXVIRTUALSCREEN)
+                    h = w32.user32.GetSystemMetrics(SM_CYVIRTUALSCREEN)
+                    if w > 0 and h > 0:
+                        return VirtualScreenBounds(left=x, top=y, width=w, height=h)
             except Exception:
                 pass
         # Fallback to standard 1080p primary display
@@ -197,6 +253,7 @@ class CoordinateTransformer:
         """
         Normalizes physical screen pixel coordinates into Win32 MOUSEEVENTF_ABSOLUTE
         normalized space (0..65535) across the virtual desktop bounding box.
+        Handles negative screen origins across multi-monitor setups deterministically.
         Formula:
             norm_x = round((screen_x - v_left) * 65535 / (v_width - 1))
             norm_y = round((screen_y - v_top) * 65535 / (v_height - 1))
@@ -251,7 +308,7 @@ class CoordinateTransformer:
         """
         Performs full round-trip verification:
         CSS -> Screen -> SendInput Normalized -> Screen -> CSS
-        Validates that logical rounding error is < 0.5px and physical delta is <= 1.0px.
+        Validates that logical rounding error is <= 0.5px and physical delta is <= 1.0px.
         """
         v_screen = context.virtual_screen or cls.get_system_virtual_screen()
         ctx = CoordinateTransformContext(
@@ -280,3 +337,64 @@ class CoordinateTransformer:
             "is_safe": (logical_delta <= 0.5 and sendinput_delta <= 1.0),
         }
 
+    # -------------------------------------------------------------------------
+    # 7. Multi-Monitor Simulation Helpers
+    # -------------------------------------------------------------------------
+    @staticmethod
+    def create_simulated_dual_monitor_topology(
+        primary_res: Tuple[int, int] = (1920, 1080),
+        primary_dpi: float = 1.25,
+        secondary_res: Tuple[int, int] = (1920, 1080),
+        secondary_dpi: float = 1.0,
+        secondary_position: str = "left",  # "left", "right", "top", "bottom"
+    ) -> MultiMonitorTopology:
+        """
+        Creates a deterministic multi-monitor topology for automated testing.
+        Clearly marked as simulation for reproducible CI/CD verification.
+        """
+        p_w, p_h = primary_res
+        s_w, s_h = secondary_res
+
+        primary_bounds = Rect(0, 0, p_w, p_h)
+
+        if secondary_position == "left":
+            secondary_bounds = Rect(-s_w, 0, s_w, s_h)
+            v_left = -s_w
+            v_top = 0
+            v_w = p_w + s_w
+            v_h = max(p_h, s_h)
+        elif secondary_position == "right":
+            secondary_bounds = Rect(p_w, 0, s_w, s_h)
+            v_left = 0
+            v_top = 0
+            v_w = p_w + s_w
+            v_h = max(p_h, s_h)
+        elif secondary_position == "top":
+            secondary_bounds = Rect(0, -s_h, s_w, s_h)
+            v_left = 0
+            v_top = -s_h
+            v_w = max(p_w, s_w)
+            v_h = p_h + s_h
+        else:  # bottom
+            secondary_bounds = Rect(0, p_h, s_w, s_h)
+            v_left = 0
+            v_top = 0
+            v_w = max(p_w, s_w)
+            v_h = p_h + s_h
+
+        monitors = [
+            MonitorDescriptor(
+                monitor_id="DISPLAY_PRIMARY",
+                bounds=primary_bounds,
+                is_primary=True,
+                dpi_scale=primary_dpi,
+            ),
+            MonitorDescriptor(
+                monitor_id=f"DISPLAY_SECONDARY_{secondary_position.upper()}",
+                bounds=secondary_bounds,
+                is_primary=False,
+                dpi_scale=secondary_dpi,
+            ),
+        ]
+        virtual_screen = VirtualScreenBounds(left=v_left, top=v_top, width=v_w, height=v_h)
+        return MultiMonitorTopology(monitors=monitors, virtual_screen=virtual_screen)

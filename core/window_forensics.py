@@ -1,21 +1,27 @@
 """
 Native Windows GUI Forensics and Window Identity Verification.
 Provides Win32 API inspection via ctypes and psutil for forensic verification of desktop applications.
+Audited for 64-bit safety, leak-free GDI Device Context lifecycle, and DWM physical boundary authority.
 """
 
+from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import hashlib
 import json
 import logging
 import os
+import struct
 import sys
 import time
+import zlib
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+import runtime.win32 as w32
 
 logger = logging.getLogger("desktop_webview.forensics")
 
-# Structure definitions for Win32 API
+# Structure definitions for Win32 API (legacy compatibility)
 class RECT(ctypes.Structure):
     _fields_ = [
         ("left", wintypes.LONG),
@@ -33,8 +39,9 @@ class RECT(ctypes.Structure):
             "left": self.left,
             "top": self.top,
             "right": self.right,
-            "bottom": self.bottom
+            "bottom": self.bottom,
         }
+
 
 class BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [
@@ -51,8 +58,10 @@ class BITMAPINFOHEADER(ctypes.Structure):
         ("biClrImportant", wintypes.DWORD),
     ]
 
+
 # Win32 Constants
 DWMWA_CLOAKED = 14
+DWMWA_EXTENDED_FRAME_BOUNDS = 9
 PW_RENDERFULLCONTENT = 2
 SRCCOPY = 0x00CC0020
 BI_RGB = 0
@@ -65,6 +74,7 @@ class WindowForensicsEngine:
     """
     Forensic inspector for native OS window identity, visibility, geometry,
     and process-tree correlation on Windows (with non-Windows safe fallbacks).
+    Hardened with 64-bit ctypes prototypes and leak-free GDI resources.
     """
 
     @staticmethod
@@ -91,7 +101,7 @@ class WindowForensicsEngine:
             "executable": None,
             "cmdline": [],
             "status": "unknown",
-            "create_time": None
+            "create_time": None,
         }
         try:
             import psutil
@@ -110,7 +120,7 @@ class WindowForensicsEngine:
     @classmethod
     def inspect_hwnd(cls, hwnd: int) -> Dict[str, Any]:
         """Performs deep Win32 inspection on a specific HWND."""
-        if sys.platform != "win32":
+        if sys.platform != "win32" or w32.user32 is None:
             return {
                 "hwnd": hwnd,
                 "is_window": True,
@@ -120,12 +130,18 @@ class WindowForensicsEngine:
                 "title": "",
                 "class_name": "",
                 "pid": 0,
-                "geometry": {"x": 0, "y": 0, "width": 800, "height": 600, "left": 0, "top": 0, "right": 800, "bottom": 600},
-                "is_real_gui": True
+                "geometry": {
+                    "x": 0, "y": 0, "width": 800, "height": 600,
+                    "left": 0, "top": 0, "right": 800, "bottom": 600,
+                },
+                "canonical_geometry": {
+                    "x": 0, "y": 0, "width": 800, "height": 600,
+                },
+                "is_real_gui": True,
             }
 
-        user32 = ctypes.windll.user32
-        dwmapi = ctypes.windll.dwmapi
+        user32 = w32.user32
+        dwmapi = w32.dwmapi
 
         if not user32.IsWindow(hwnd):
             return {
@@ -137,8 +153,14 @@ class WindowForensicsEngine:
                 "title": "",
                 "class_name": "",
                 "pid": 0,
-                "geometry": {"x": 0, "y": 0, "width": 0, "height": 0, "left": 0, "top": 0, "right": 0, "bottom": 0},
-                "is_real_gui": False
+                "geometry": {
+                    "x": 0, "y": 0, "width": 0, "height": 0,
+                    "left": 0, "top": 0, "right": 0, "bottom": 0,
+                },
+                "canonical_geometry": {
+                    "x": 0, "y": 0, "width": 0, "height": 0,
+                },
+                "is_real_gui": False,
             }
 
         # 1. Thread and Process ID
@@ -150,20 +172,44 @@ class WindowForensicsEngine:
         is_visible = bool(user32.IsWindowVisible(hwnd))
         is_iconic = bool(user32.IsIconic(hwnd))
 
-        # 3. DWM Cloaked State (Virtual Desktops / System hidden)
+        # 3. DWM Cloaked State
         cloaked_val = wintypes.DWORD(0)
-        try:
-            res = dwmapi.DwmGetWindowAttribute(
-                hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked_val), ctypes.sizeof(cloaked_val)
-            )
-            is_cloaked = (res == 0 and cloaked_val.value != 0)
-        except Exception:
-            is_cloaked = False
+        is_cloaked = False
+        if dwmapi is not None:
+            try:
+                res = dwmapi.DwmGetWindowAttribute(
+                    hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked_val), ctypes.sizeof(cloaked_val)
+                )
+                is_cloaked = (res == 0 and cloaked_val.value != 0)
+            except Exception:
+                is_cloaked = False
 
-        # 4. Geometry
+        # 4. Geometry (Raw GetWindowRect for backward compatibility)
         rect = RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))
         geom = rect.to_dict()
+
+        # Authoritative DWM Extended Frame Bounds
+        canonical_geom = dict(geom)
+        if dwmapi is not None:
+            dwm_struct = w32.RECT()
+            res = dwmapi.DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                ctypes.byref(dwm_struct),
+                ctypes.sizeof(w32.RECT),
+            )
+            if res == 0 and dwm_struct.right > dwm_struct.left and dwm_struct.bottom > dwm_struct.top:
+                canonical_geom = {
+                    "x": dwm_struct.left,
+                    "y": dwm_struct.top,
+                    "width": dwm_struct.right - dwm_struct.left,
+                    "height": dwm_struct.bottom - dwm_struct.top,
+                    "left": dwm_struct.left,
+                    "top": dwm_struct.top,
+                    "right": dwm_struct.right,
+                    "bottom": dwm_struct.bottom,
+                }
 
         # 5. Title & Class Name
         length = user32.GetWindowTextLengthW(hwnd)
@@ -176,7 +222,6 @@ class WindowForensicsEngine:
         class_name = cls_buf.value
 
         # 6. Real GUI Evaluation
-        # A real visible GUI must be a window, visible, not minimized, not cloaked, and have non-zero visible dimensions
         is_real_gui = (
             is_visible
             and not is_iconic
@@ -195,17 +240,18 @@ class WindowForensicsEngine:
             "class_name": class_name,
             "pid": pid,
             "geometry": geom,
-            "is_real_gui": is_real_gui
+            "canonical_geometry": canonical_geom,
+            "is_real_gui": is_real_gui,
         }
 
     @classmethod
     def find_windows_for_process_tree(cls, root_pid: int) -> List[Dict[str, Any]]:
         """Finds all top-level HWNDs associated with the process subtree rooted at root_pid."""
-        if sys.platform != "win32":
+        if sys.platform != "win32" or w32.user32 is None:
             return []
 
         target_pids = cls.get_process_tree_pids(root_pid)
-        user32 = ctypes.windll.user32
+        user32 = w32.user32
         results: List[Dict[str, Any]] = []
 
         def enum_cb(hwnd, lparam):
@@ -223,7 +269,9 @@ class WindowForensicsEngine:
         return results
 
     @classmethod
-    def get_primary_gui_window(cls, root_pid: int, expected_title_substring: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_primary_gui_window(
+        cls, root_pid: int, expected_title_substring: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Locates the best primary visible GUI window for the given process tree.
         Prioritizes windows with real GUI dimensions, visibility, and title matches.
@@ -232,15 +280,13 @@ class WindowForensicsEngine:
         if not windows:
             return None
 
-        # Filter to real GUI windows
         real_windows = [w for w in windows if w.get("is_real_gui")]
         if not real_windows:
             return windows[0]
 
-        # Filter out OS helper/overlay windows if main windows exist
         IGNORE_CLASSES = {
             "uac_inputindicatoroverlaywnd", "msctfime ui", "tooltips_class32",
-            "default ime", "ime", "workerw", "progman"
+            "default ime", "ime", "workerw", "progman",
         }
         filtered = [
             w for w in real_windows
@@ -250,46 +296,43 @@ class WindowForensicsEngine:
         ]
         candidates = filtered if filtered else real_windows
 
-        # If title filter provided, score matches
         if expected_title_substring:
             sub = expected_title_substring.strip().lower()
             matching = [w for w in candidates if sub in (w.get("title") or "").lower()]
             if matching:
-                matching.sort(key=lambda w: w["geometry"]["width"] * w["geometry"]["height"], reverse=True)
+                matching.sort(
+                    key=lambda w: w["geometry"]["width"] * w["geometry"]["height"], reverse=True
+                )
                 return matching[0]
 
-        # Return largest real window
-        candidates.sort(key=lambda w: w["geometry"]["width"] * w["geometry"]["height"], reverse=True)
+        candidates.sort(
+            key=lambda w: w["geometry"]["width"] * w["geometry"]["height"], reverse=True
+        )
         return candidates[0]
 
     @classmethod
     def set_foreground_window(cls, hwnd: int) -> Tuple[bool, int, str]:
         """
-        Phase 2 Focus Capability: Brings window to top, restores if minimized,
-        and sets foreground focus. Verifies the active foreground HWND.
-        Returns (success, actual_foreground_hwnd, reason).
+        Brings window to top, restores if minimized, and sets foreground focus.
+        Verifies the active foreground HWND. Returns (success, actual_foreground_hwnd, reason).
         """
-        if sys.platform != "win32":
+        if sys.platform != "win32" or w32.user32 is None:
             return True, hwnd, "Non-windows host: simulated focus success"
 
-        user32 = ctypes.windll.user32
+        user32 = w32.user32
         if not user32.IsWindow(hwnd):
             return False, 0, f"Invalid window handle HWND: {hwnd}"
 
-        # 1. Restore if minimized (SW_RESTORE = 9)
         if user32.IsIconic(hwnd):
-            user32.ShowWindow(hwnd, 9)
+            user32.ShowWindow(hwnd, w32.SW_RESTORE)
             time.sleep(0.1)
 
-        # 2. Bring to top & set foreground
         user32.BringWindowToTop(hwnd)
         user32.SetForegroundWindow(hwnd)
         time.sleep(0.1)
 
-        # 3. Confirm foreground HWND
         fg_hwnd = user32.GetForegroundWindow()
 
-        # Check PID match if HWND is child/dialog
         pid_var = wintypes.DWORD()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_var))
         target_pid = pid_var.value
@@ -308,8 +351,8 @@ class WindowForensicsEngine:
     @classmethod
     def get_dpi_and_display_metrics(cls, hwnd: int) -> Dict[str, Any]:
         """
-        Phase 2 Display & DPI Sanity: Queries monitor handle, DPI scaling factor,
-        work area geometry, and physical vs logical pixel dimensions.
+        Queries monitor handle, DPI scaling factor, work area geometry, and physical dimensions.
+        Audited for 64-bit HMONITOR pointer safety.
         """
         metrics: Dict[str, Any] = {
             "hwnd": hwnd,
@@ -317,43 +360,42 @@ class WindowForensicsEngine:
             "dpi_scale": 1.0,
             "monitor_handle": 0,
             "monitor_rect": {"x": 0, "y": 0, "width": 1920, "height": 1080},
-            "window_geometry": {"x": 0, "y": 0, "width": 800, "height": 600}
+            "window_geometry": {"x": 0, "y": 0, "width": 800, "height": 600},
         }
-        if sys.platform != "win32":
+        if sys.platform != "win32" or w32.user32 is None:
             return metrics
 
-        user32 = ctypes.windll.user32
+        user32 = w32.user32
         if not user32.IsWindow(hwnd):
             return metrics
 
-        # 1. Window geometry
         rect = RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))
         metrics["window_geometry"] = rect.to_dict()
 
-        # 2. DPI query via GetDpiForWindow (Win10 1607+)
         dpi = 96
-        try:
-            if hasattr(user32, "GetDpiForWindow"):
+        if hasattr(user32, "GetDpiForWindow"):
+            try:
                 dpi_val = user32.GetDpiForWindow(hwnd)
                 if dpi_val > 0:
                     dpi = dpi_val
-        except Exception:
-            dpi = 96
+            except Exception:
+                dpi = 96
         metrics["dpi"] = dpi
         metrics["dpi_scale"] = round(dpi / 96.0, 2)
 
-        # 3. Monitor handle (MONITOR_DEFAULTTONEAREST = 2)
-        hmon = user32.MonitorFromWindow(hwnd, 2)
+        # 64-bit safe HMONITOR query
+        hmon = user32.MonitorFromWindow(hwnd, w32.MONITOR_DEFAULTTONEAREST)
         metrics["monitor_handle"] = int(hmon) if hmon else 0
 
         return metrics
 
     @staticmethod
-    def verify_port_listening_process(port: int, expected_pids: Set[int]) -> Tuple[bool, Optional[int], str]:
+    def verify_port_listening_process(
+        port: int, expected_pids: Set[int]
+    ) -> Tuple[bool, Optional[int], str]:
         """
         Verifies whether the process listening on `port` belongs to the expected process tree.
-        Returns (is_verified, listening_pid, reason).
         """
         try:
             import psutil
@@ -368,21 +410,22 @@ class WindowForensicsEngine:
                         return False, listening_pid, f"Port {port} is occupied by foreign PID {listening_pid} (expected one of {sorted(list(expected_pids))})"
             return False, None, f"No process found listening on port {port}"
         except (ImportError, Exception) as e:
-            # Fallback when psutil connection inspection is unavailable
             return True, None, f"Port ownership could not be strictly checked via net_connections ({e})"
 
     @classmethod
-    def capture_native_window_screenshot(cls, hwnd: int, output_path: str) -> Tuple[bool, str, str]:
+    def capture_native_window_screenshot(
+        cls, hwnd: int, output_path: str
+    ) -> Tuple[bool, str, str]:
         """
         Captures the OS desktop window surface using Win32 GDI PrintWindow.
-        Validates PNG header, computes SHA-256 hash, and saves to output_path.
-        Returns (success, sha256_hash, error_msg).
+        Guaranteed resource cleanup in try...finally blocks, eliminating GDI DC leaks.
+        Computes SHA-256 hash and saves to output_path. Returns (success, sha256_hash, error_msg).
         """
-        if sys.platform != "win32":
+        if sys.platform != "win32" or w32.user32 is None or w32.gdi32 is None:
             return False, "", "Native window capture is only supported on Windows host."
 
-        user32 = ctypes.windll.user32
-        gdi32 = ctypes.windll.gdi32
+        user32 = w32.user32
+        gdi32 = w32.gdi32
 
         if not user32.IsWindow(hwnd):
             return False, "", f"Invalid window handle HWND: {hwnd}"
@@ -395,153 +438,154 @@ class WindowForensicsEngine:
         if width <= 0 or height <= 0:
             return False, "", f"Window has zero or negative geometry ({width}x{height})"
 
-        hdc_window = user32.GetWindowDC(hwnd)
-        if not hdc_window:
-            return False, "", "Failed to acquire Window Device Context (GetWindowDC)"
+        hdc_window = None
+        hdc_mem = None
+        hbm = None
+        hbm_old = None
 
-        hdc_mem = gdi32.CreateCompatibleDC(hdc_window)
-        if not hdc_mem:
-            user32.ReleaseDC(hwnd, hdc_window)
-            return False, "", "Failed to create memory Device Context (CreateCompatibleDC)"
-
-        hbm = gdi32.CreateCompatibleBitmap(hdc_window, width, height)
-        if not hbm:
-            gdi32.DeleteDC(hdc_mem)
-            user32.ReleaseDC(hwnd, hdc_window)
-            return False, "", "Failed to create compatible bitmap (CreateCompatibleBitmap)"
-
-        hbm_old = gdi32.SelectObject(hdc_mem, hbm)
-
-        # PW_RENDERFULLCONTENT = 2
-        printed = user32.PrintWindow(hwnd, hdc_mem, PW_RENDERFULLCONTENT)
-        if not printed:
-            # Fallback to standard PrintWindow
-            printed = user32.PrintWindow(hwnd, hdc_mem, 0)
-        if not printed:
-            # Fallback to BitBlt
-            printed = gdi32.BitBlt(hdc_mem, 0, 0, width, height, hdc_window, 0, 0, SRCCOPY)
-
-        # Read bitmap bits into memory
-        bmi = BITMAPINFOHEADER()
-        bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
-        bmi.biWidth = width
-        bmi.biHeight = -height  # top-down DIB
-        bmi.biPlanes = 1
-        bmi.biBitCount = 32
-        bmi.biCompression = BI_RGB
-        bmi.biSizeImage = width * height * 4
-
-        raw_buffer = ctypes.create_string_buffer(bmi.biSizeImage)
-        gdi32.GetDIBits(
-            hdc_mem,
-            hbm,
-            0,
-            height,
-            raw_buffer,
-            ctypes.byref(bmi),
-            DIB_RGB_COLORS
-        )
-
-        # Cleanup GDI resources
-        gdi32.SelectObject(hdc_mem, hbm_old)
-        gdi32.DeleteObject(hbm)
-        gdi32.DeleteDC(hdc_mem)
-        user32.ReleaseDC(hwnd, hdc_window)
-
-        # Convert BGRA buffer to PNG
         try:
+            hdc_window = user32.GetWindowDC(hwnd)
+            if not hdc_window:
+                return False, "", "Failed to acquire Window Device Context (GetWindowDC)"
+
+            hdc_mem = gdi32.CreateCompatibleDC(hdc_window)
+            if not hdc_mem:
+                return False, "", "Failed to create memory Device Context (CreateCompatibleDC)"
+
+            hbm = gdi32.CreateCompatibleBitmap(hdc_window, width, height)
+            if not hbm:
+                return False, "", "Failed to create compatible bitmap (CreateCompatibleBitmap)"
+
+            hbm_old = gdi32.SelectObject(hdc_mem, hbm)
+
+            # PW_RENDERFULLCONTENT = 2
+            printed = user32.PrintWindow(hwnd, hdc_mem, PW_RENDERFULLCONTENT)
+            if not printed:
+                printed = user32.PrintWindow(hwnd, hdc_mem, 0)
+            if not printed:
+                printed = gdi32.BitBlt(hdc_mem, 0, 0, width, height, hdc_window, 0, 0, SRCCOPY)
+
+            bmi = BITMAPINFOHEADER()
+            bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+            bmi.biWidth = width
+            bmi.biHeight = -height  # top-down DIB
+            bmi.biPlanes = 1
+            bmi.biBitCount = 32
+            bmi.biCompression = BI_RGB
+            bmi.biSizeImage = width * height * 4
+
+            raw_buffer = ctypes.create_string_buffer(bmi.biSizeImage)
+            gdi32.GetDIBits(
+                hdc_mem,
+                hbm,
+                0,
+                height,
+                raw_buffer,
+                ctypes.byref(bmi),
+                DIB_RGB_COLORS,
+            )
+
             png_bytes = cls._raw_bgra_to_png(bytes(raw_buffer), width, height)
             sha256_hash = hashlib.sha256(png_bytes).hexdigest()
-            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(png_bytes)
             return True, sha256_hash, ""
+
         except Exception as e:
             return False, "", f"Failed to encode or write native screenshot: {e}"
 
+        finally:
+            if hdc_mem and hbm_old:
+                gdi32.SelectObject(hdc_mem, hbm_old)
+            if hbm:
+                gdi32.DeleteObject(hbm)
+            if hdc_mem:
+                gdi32.DeleteDC(hdc_mem)
+            if hdc_window:
+                user32.ReleaseDC(hwnd, hdc_window)
 
     @classmethod
     def capture_desktop_screenshot(cls, output_path: str) -> Tuple[bool, str, str]:
         """
-        Captures the entire primary OS desktop surface using Win32 GDI.
-        Validates PNG header, computes SHA-256 hash, and saves to output_path.
-        Returns (success, sha256_hash, error_msg).
+        Captures the entire primary OS desktop surface using Win32 GDI with guaranteed cleanup.
         """
-        if sys.platform != "win32":
+        if sys.platform != "win32" or w32.user32 is None or w32.gdi32 is None:
             return False, "", "Desktop capture is only supported on Windows host."
 
-        user32 = ctypes.windll.user32
-        gdi32 = ctypes.windll.gdi32
+        user32 = w32.user32
+        gdi32 = w32.gdi32
 
-        # 0 gives the screen DC
-        hdc_screen = user32.GetDC(0)
-        if not hdc_screen:
-            return False, "", "Failed to acquire Screen Device Context"
+        hdc_screen = None
+        hdc_mem = None
+        hbm = None
+        hbm_old = None
 
-        width = user32.GetSystemMetrics(0) # SM_CXSCREEN
-        height = user32.GetSystemMetrics(1) # SM_CYSCREEN
-
-        hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
-        hbm = gdi32.CreateCompatibleBitmap(hdc_screen, width, height)
-        hbm_old = gdi32.SelectObject(hdc_mem, hbm)
-
-        # BitBlt from screen to memory DC
-        SRCCOPY = 0x00CC0020
-        printed = gdi32.BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, 0, 0, SRCCOPY)
-
-        if not printed:
-            gdi32.SelectObject(hdc_mem, hbm_old)
-            gdi32.DeleteObject(hbm)
-            gdi32.DeleteDC(hdc_mem)
-            user32.ReleaseDC(0, hdc_screen)
-            return False, "", "Failed to BitBlt screen"
-
-        # Read bitmap bits into memory
-        bmi = BITMAPINFOHEADER()
-        bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
-        bmi.biWidth = width
-        bmi.biHeight = -height  # top-down DIB
-        bmi.biPlanes = 1
-        bmi.biBitCount = 32
-        bmi.biCompression = 0 # BI_RGB
-        bmi.biSizeImage = width * height * 4
-
-        raw_buffer = ctypes.create_string_buffer(bmi.biSizeImage)
-        gdi32.GetDIBits(
-            hdc_mem,
-            hbm,
-            0,
-            height,
-            raw_buffer,
-            ctypes.byref(bmi),
-            0 # DIB_RGB_COLORS
-        )
-
-        # Cleanup GDI resources
-        gdi32.SelectObject(hdc_mem, hbm_old)
-        gdi32.DeleteObject(hbm)
-        gdi32.DeleteDC(hdc_mem)
-        user32.ReleaseDC(0, hdc_screen)
-
-        # Convert BGRA buffer to PNG
         try:
+            hdc_screen = user32.GetDC(0)
+            if not hdc_screen:
+                return False, "", "Failed to acquire Screen Device Context"
+
+            width = user32.GetSystemMetrics(0)
+            height = user32.GetSystemMetrics(1)
+
+            hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+            if not hdc_mem:
+                return False, "", "Failed to create memory Device Context"
+
+            hbm = gdi32.CreateCompatibleBitmap(hdc_screen, width, height)
+            if not hbm:
+                return False, "", "Failed to create compatible bitmap"
+
+            hbm_old = gdi32.SelectObject(hdc_mem, hbm)
+
+            printed = gdi32.BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, 0, 0, SRCCOPY)
+            if not printed:
+                return False, "", "Failed to BitBlt screen"
+
+            bmi = BITMAPINFOHEADER()
+            bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+            bmi.biWidth = width
+            bmi.biHeight = -height
+            bmi.biPlanes = 1
+            bmi.biBitCount = 32
+            bmi.biCompression = BI_RGB
+            bmi.biSizeImage = width * height * 4
+
+            raw_buffer = ctypes.create_string_buffer(bmi.biSizeImage)
+            gdi32.GetDIBits(
+                hdc_mem,
+                hbm,
+                0,
+                height,
+                raw_buffer,
+                ctypes.byref(bmi),
+                DIB_RGB_COLORS,
+            )
+
             png_bytes = cls._raw_bgra_to_png(bytes(raw_buffer), width, height)
-            import hashlib
             sha256_hash = hashlib.sha256(png_bytes).hexdigest()
-            import os
-            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(png_bytes)
             return True, sha256_hash, ""
+
         except Exception as e:
             return False, "", f"Failed to encode or write desktop screenshot: {e}"
+
+        finally:
+            if hdc_mem and hbm_old:
+                gdi32.SelectObject(hdc_mem, hbm_old)
+            if hbm:
+                gdi32.DeleteObject(hbm)
+            if hdc_mem:
+                gdi32.DeleteDC(hdc_mem)
+            if hdc_screen:
+                user32.ReleaseDC(0, hdc_screen)
 
     @staticmethod
     def _raw_bgra_to_png(bgra_data: bytes, width: int, height: int) -> bytes:
         """Encodes raw 32-bit BGRA bytes into uncompressed/deflated PNG format in pure Python."""
-        import zlib
-        import struct
-
         scanline_len = width * 4
         raw_rows = []
         for y in range(height):
@@ -564,7 +608,7 @@ class WindowForensicsEngine:
 
         def make_chunk(chunk_type: bytes, data: bytes) -> bytes:
             length = struct.pack(">I", len(data))
-            crc = struct.pack(">I", zlib.crc32(chunk_type + data) & 0xffffffff)
+            crc = struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
             return length + chunk_type + data + crc
 
         png_header = b"\x89PNG\r\n\x1a\n"

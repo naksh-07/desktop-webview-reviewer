@@ -1,7 +1,8 @@
 """
 Process Supervisor and Windows Job Object Management for Desktop WebView Reviewer.
 Ensures deterministic process-tree tracking, PID reuse protection via create_time validation,
-and guaranteed child process teardown via JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
+and guaranteed child/grandchild process teardown via JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
+Provides kernel-level Job Object membership inspection via QueryInformationJobObject.
 """
 
 from __future__ import annotations
@@ -16,7 +17,17 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Any
 
-from runtime.errors import TargetExitedException, CleanupErrorException
+from runtime.errors import TargetExitedException, CleanupErrorException, TargetMismatchException
+import runtime.win32 as w32
+
+# Re-export Win32 constants and structures for backward compatibility
+JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = w32.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+JobObjectExtendedLimitInformation = w32.JobObjectExtendedLimitInformation
+PROCESS_SET_QUOTA = w32.PROCESS_SET_QUOTA
+PROCESS_TERMINATE = w32.PROCESS_TERMINATE
+JOBOBJECT_EXTENDED_LIMIT_INFORMATION = w32.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+JOBOBJECT_BASIC_LIMIT_INFORMATION = w32.JOBOBJECT_BASIC_LIMIT_INFORMATION
+IO_COUNTERS = w32.IO_COUNTERS
 
 logger = logging.getLogger("desktop_webview.process_supervisor")
 
@@ -24,49 +35,6 @@ try:
     import psutil
 except ImportError:
     psutil = None
-
-# Win32 Constants for Job Objects
-JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
-JobObjectExtendedLimitInformation = 9
-PROCESS_SET_QUOTA = 0x0100
-PROCESS_TERMINATE = 0x0001
-
-
-# Win32 Job Object Structures
-class IO_COUNTERS(ctypes.Structure):
-    _fields_ = [
-        ("ReadOperationCount", ctypes.c_uint64),
-        ("WriteOperationCount", ctypes.c_uint64),
-        ("OtherOperationCount", ctypes.c_uint64),
-        ("ReadTransferCount", ctypes.c_uint64),
-        ("WriteTransferCount", ctypes.c_uint64),
-        ("OtherTransferCount", ctypes.c_uint64),
-    ]
-
-
-class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
-    _fields_ = [
-        ("PerProcessUserTimeLimit", ctypes.c_int64),
-        ("PerJobUserTimeLimit", ctypes.c_int64),
-        ("LimitFlags", wintypes.DWORD),
-        ("MinimumWorkingSetSize", ctypes.c_size_t),
-        ("MaximumWorkingSetSize", ctypes.c_size_t),
-        ("ActiveProcessLimit", wintypes.DWORD),
-        ("Affinity", ctypes.c_size_t),
-        ("PriorityClass", wintypes.DWORD),
-        ("SchedulingClass", wintypes.DWORD),
-    ]
-
-
-class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
-    _fields_ = [
-        ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
-        ("IoInfo", IO_COUNTERS),
-        ("ProcessMemoryLimit", ctypes.c_size_t),
-        ("JobMemoryLimit", ctypes.c_size_t),
-        ("PeakProcessMemoryLimit", ctypes.c_size_t),
-        ("PeakJobMemoryLimit", ctypes.c_size_t),
-    ]
 
 
 @dataclass
@@ -82,14 +50,14 @@ class SupervisedProcess:
     exit_code: Optional[int] = None
 
     def is_alive(self) -> bool:
-        """Verifies if the process is currently running and create_time matches."""
+        """Verifies if the process is currently running and create_time matches within 1.0s."""
         if psutil is not None:
             try:
                 p = psutil.Process(self.pid)
                 if not p.is_running() or p.status() == psutil.STATUS_ZOMBIE:
                     return False
-                # Verify create_time within 2 seconds to avoid PID recycling confusion
-                if abs(p.create_time() - self.creation_time) > 2.0:
+                # Strict create_time tolerance (1.0s) to protect against PID recycling
+                if abs(p.create_time() - self.creation_time) > 1.0:
                     return False
                 return True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -102,35 +70,39 @@ class SupervisedProcess:
 
 
 class Win32JobObject:
-    """Encapsulates a Win32 Job Object with KILL_ON_JOB_CLOSE guarantees."""
+    """
+    Encapsulates a Win32 Job Object with KILL_ON_JOB_CLOSE guarantees.
+    Provides kernel-level process membership inspection via IsProcessInJob
+    and QueryInformationJobObject(JobObjectBasicProcessIdList).
+    """
 
     def __init__(self, name: Optional[str] = None):
         self.handle: Optional[int] = None
         self.name = name
-        if sys.platform == "win32":
+        self._assigned_pids: Set[int] = set()
+        if sys.platform == "win32" and w32.kernel32 is not None:
             self._create_job_object()
 
     def _create_job_object(self) -> None:
-        kernel32 = ctypes.windll.kernel32
-        h_job = kernel32.CreateJobObjectW(None, self.name)
+        h_job = w32.kernel32.CreateJobObjectW(None, self.name)
         if not h_job:
             err = ctypes.GetLastError()
             logger.error(f"Failed to create Job Object: {err}")
             return
 
-        info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
-        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        info = w32.JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        info.BasicLimitInformation.LimitFlags = w32.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
 
-        res = kernel32.SetInformationJobObject(
+        res = w32.kernel32.SetInformationJobObject(
             h_job,
-            JobObjectExtendedLimitInformation,
+            w32.JobObjectExtendedLimitInformation,
             ctypes.byref(info),
-            ctypes.sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION),
+            ctypes.sizeof(w32.JOBOBJECT_EXTENDED_LIMIT_INFORMATION),
         )
         if not res:
             err = ctypes.GetLastError()
             logger.error(f"Failed to set Job Object limit flags: {err}")
-            kernel32.CloseHandle(h_job)
+            w32.kernel32.CloseHandle(h_job)
             return
 
         self.handle = int(h_job)
@@ -138,16 +110,17 @@ class Win32JobObject:
 
     def assign_process(self, pid: int, process_handle: Optional[int] = None) -> bool:
         """Assigns target process to the Job Object."""
-        if sys.platform != "win32" or not self.handle:
+        if sys.platform != "win32" or not self.handle or w32.kernel32 is None:
+            self._assigned_pids.add(pid)
             return True
 
-        kernel32 = ctypes.windll.kernel32
         close_handle_after = False
         h_proc = process_handle
 
         if not h_proc:
-            # Open process handle with required rights
-            h_proc = kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
+            h_proc = w32.kernel32.OpenProcess(
+                w32.PROCESS_SET_QUOTA | w32.PROCESS_TERMINATE, False, pid
+            )
             if not h_proc:
                 err = ctypes.GetLastError()
                 logger.warning(f"OpenProcess for Job Object assignment failed on PID {pid}: {err}")
@@ -155,38 +128,91 @@ class Win32JobObject:
             close_handle_after = True
 
         try:
-            res = kernel32.AssignProcessToJobObject(self.handle, h_proc)
+            res = w32.kernel32.AssignProcessToJobObject(self.handle, h_proc)
             if not res:
                 err = ctypes.GetLastError()
                 logger.warning(f"AssignProcessToJobObject failed for PID {pid}: {err}")
                 return False
+            self._assigned_pids.add(pid)
             logger.debug(f"Successfully bound PID {pid} to Job Object handle {self.handle}")
             return True
         finally:
             if close_handle_after and h_proc:
-                kernel32.CloseHandle(h_proc)
+                w32.kernel32.CloseHandle(h_proc)
+
+    def is_process_in_job(self, pid: int) -> bool:
+        """
+        Kernel verification: queries IsProcessInJob to verify whether PID is a member of this Job Object.
+        """
+        if sys.platform != "win32" or not self.handle or w32.kernel32 is None:
+            return pid in self._assigned_pids
+
+        h_proc = w32.kernel32.OpenProcess(
+            w32.PROCESS_QUERY_INFORMATION | w32.PROCESS_QUERY_LIMITED_INFORMATION,
+            False,
+            pid,
+        )
+        if not h_proc:
+            # If process has exited, it is no longer in the job
+            return False
+
+        try:
+            in_job = wintypes.BOOL(False)
+            res = w32.kernel32.IsProcessInJob(h_proc, self.handle, ctypes.byref(in_job))
+            return bool(res and in_job.value)
+        finally:
+            w32.kernel32.CloseHandle(h_proc)
+
+    def get_process_ids(self) -> List[int]:
+        """
+        Queries Windows kernel via QueryInformationJobObject(JobObjectBasicProcessIdList)
+        to return the exact list of PIDs currently bound to this Job Object.
+        """
+        if sys.platform != "win32" or not self.handle or w32.kernel32 is None:
+            return list(self._assigned_pids)
+
+        proc_list = w32.JOBOBJECT_BASIC_PROCESS_ID_LIST()
+        ret_len = wintypes.DWORD(0)
+
+        res = w32.kernel32.QueryInformationJobObject(
+            self.handle,
+            w32.JobObjectBasicProcessIdList,
+            ctypes.byref(proc_list),
+            ctypes.sizeof(w32.JOBOBJECT_BASIC_PROCESS_ID_LIST),
+            ctypes.byref(ret_len),
+        )
+        if not res:
+            logger.debug("QueryInformationJobObject failed; returning tracked PIDs")
+            return list(self._assigned_pids)
+
+        count = proc_list.NumberOfProcessIdsInList
+        return [int(proc_list.ProcessIdList[i]) for i in range(count)]
 
     def close(self) -> None:
-        """Closes the Job Object handle, triggering automatic kernel termination of all member processes."""
-        if sys.platform == "win32" and self.handle:
+        """
+        Closes the Job Object handle.
+        Windows kernel automatically and synchronously terminates all processes currently in the job.
+        """
+        if sys.platform == "win32" and self.handle and w32.kernel32 is not None:
             try:
-                ctypes.windll.kernel32.CloseHandle(self.handle)
+                w32.kernel32.CloseHandle(self.handle)
                 logger.debug(f"Closed Job Object handle {self.handle}")
             except Exception as e:
                 logger.error(f"Error closing Job Object handle: {e}")
             finally:
                 self.handle = None
+        self._assigned_pids.clear()
 
 
 class ProcessSupervisor:
     """
-    Dedicated supervisor abstraction managing process launches, PID tracking,
+    Authoritative process supervisor managing process launches, PID tracking,
     process-tree correlation, Job Objects, and guaranteed orphan-free cleanup.
     """
 
     def __init__(self):
         self._processes: Dict[int, SupervisedProcess] = {}
-        self._job_objects: List[Win32JobObject] = []
+        self._job_objects: Dict[int, Win32JobObject] = {}  # pid -> JobObject
 
     def launch_process(
         self,
@@ -198,7 +224,7 @@ class ProcessSupervisor:
     ) -> SupervisedProcess:
         """
         Launches an application process and immediately binds it to a Win32 Job Object.
-        Guarantees 100% cleanup of all child processes when the Job Object closes.
+        Guarantees 100% cleanup of parent, child, and grandchild processes when the Job Object closes.
         """
         creationflags = 0
         if sys.platform == "win32" and detached:
@@ -236,7 +262,7 @@ class ProcessSupervisor:
             job = Win32JobObject(name=f"DesktopReviewer_Job_{pid}_{int(creation_time)}")
             if job.handle:
                 job.assign_process(pid)
-                self._job_objects.append(job)
+                self._job_objects[pid] = job
 
         supervised = SupervisedProcess(
             pid=pid,
@@ -276,9 +302,36 @@ class ProcessSupervisor:
         self._processes[pid] = supervised
         return supervised
 
+    def verify_pid_identity(self, pid: int, expected_create_time: float) -> bool:
+        """
+        Validates PID existence and matches create_time within 1.0s to defend against PID recycling.
+        """
+        if psutil is not None:
+            try:
+                p = psutil.Process(pid)
+                if not p.is_running() or p.status() == psutil.STATUS_ZOMBIE:
+                    return False
+                return abs(p.create_time() - expected_create_time) <= 1.0
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except Exception:
+            return False
+
+    def get_job_for_process(self, pid: int) -> Optional[Win32JobObject]:
+        """Returns the Win32JobObject governing the given root process PID, if any."""
+        return self._job_objects.get(pid)
+
     def get_process_tree_pids(self, root_pid: int) -> Set[int]:
-        """Returns the set of all PIDs in the process subtree rooted at root_pid."""
+        """
+        Returns the set of all PIDs in the process subtree rooted at root_pid.
+        Combines recursive psutil children and Win32 Job Object membership.
+        """
         pids: Set[int] = {root_pid}
+
+        # 1. psutil recursive children discovery
         if psutil is not None:
             try:
                 proc = psutil.Process(root_pid)
@@ -286,12 +339,20 @@ class ProcessSupervisor:
                     pids.add(child.pid)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
+
+        # 2. Kernel Job Object PID enumeration
+        job = self._job_objects.get(root_pid)
+        if job and job.handle:
+            for job_pid in job.get_process_ids():
+                pids.add(job_pid)
+
         return pids
 
     def terminate_process(self, pid: int, timeout: float = 3.0) -> bool:
         """
         Recursively terminates a controlled process tree using graceful SIGTERM
-        followed by SIGKILL fallback. Validates create_time before killing.
+        followed by SIGKILL fallback. Strictly validates create_time before killing.
+        Closes the Job Object to ensure kernel-level termination of any straggler processes.
         """
         supervised = self._processes.get(pid)
         expected_create_time = supervised.creation_time if supervised else None
@@ -308,13 +369,17 @@ class ProcessSupervisor:
             parent = psutil.Process(pid)
             if expected_create_time is not None:
                 actual_create_time = parent.create_time()
-                if abs(actual_create_time - expected_create_time) > 2.0:
+                if abs(actual_create_time - expected_create_time) > 1.0:
                     logger.warning(
                         f"PID {pid} create_time mismatch (expected {expected_create_time}, got {actual_create_time}). "
                         f"Skipping kill to protect recycled PID."
                     )
                     return False
         except psutil.NoSuchProcess:
+            # Process already gone; ensure Job Object is closed
+            job = self._job_objects.pop(pid, None)
+            if job:
+                job.close()
             return True
         except Exception as e:
             logger.error(f"Error accessing PID {pid}: {e}")
@@ -338,18 +403,23 @@ class ProcessSupervisor:
             parent.terminate()
             parent.wait(timeout=timeout)
             logger.info(f"Process tree for PID {pid} terminated cleanly.")
-            return True
         except psutil.NoSuchProcess:
-            return True
+            pass
         except psutil.TimeoutExpired:
             try:
                 parent.kill()
-                return True
             except Exception:
-                return False
+                pass
         except Exception as e:
             logger.error(f"Error terminating process tree for PID {pid}: {e}")
             return False
+        finally:
+            # Kernel-level kill of any remaining processes in the Job Object
+            job = self._job_objects.pop(pid, None)
+            if job:
+                job.close()
+
+        return True
 
     def cleanup_all(self, kill_external: bool = False) -> None:
         """
@@ -365,12 +435,12 @@ class ProcessSupervisor:
             except Exception as e:
                 logger.warning(f"Error terminating PID {pid}: {e}")
 
-        # Close all Job Objects (Windows kernel kills any remaining stragglers)
-        for job in self._job_objects:
+        # Close any remaining Job Objects
+        for pid, job in list(self._job_objects.items()):
             try:
                 job.close()
             except Exception as e:
-                logger.warning(f"Error closing Job Object: {e}")
+                logger.warning(f"Error closing Job Object for PID {pid}: {e}")
         self._job_objects.clear()
         self._processes.clear()
         logger.info("Process supervisor cleanup complete: all Job Objects closed.")

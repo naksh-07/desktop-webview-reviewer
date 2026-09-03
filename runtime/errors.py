@@ -88,13 +88,19 @@ class TargetExitedException(DesktopAutomationException):
 class TargetHungException(DesktopAutomationException):
     """Target window thread is unresponsive to Win32 message pump."""
 
-    def __init__(self, hwnd: int, timeout_ms: int = 500):
+    def __init__(self, hwnd_or_message: Any, timeout_ms: int = 500, **kwargs):
+        if isinstance(hwnd_or_message, int):
+            hwnd = hwnd_or_message
+            msg = f"Target window HWND {hex(hwnd)} (or {hwnd}) is hung and failed SendMessageTimeout(WM_NULL) within {timeout_ms}ms."
+        else:
+            hwnd = kwargs.get("hwnd", 0)
+            msg = str(hwnd_or_message)
         super().__init__(
-            message=f"Target window HWND {hex(hwnd)} (or {hwnd}) is hung and failed SendMessageTimeout(WM_NULL) within {timeout_ms}ms.",
+            message=msg,
             code="TARGET_HUNG",
             recoverable=True,
             agent_action_hint="Application UI thread is blocked. Wait for thread to unblock or terminate hung process.",
-            details={"hwnd": hwnd, "timeout_ms": timeout_ms},
+            details={"hwnd": hwnd, "timeout_ms": timeout_ms, **kwargs},
         )
         self.hwnd = hwnd
         self.timeout_ms = timeout_ms

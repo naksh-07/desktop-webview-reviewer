@@ -24,6 +24,7 @@ class UntrustedUIText:
     indirect prompt injection attacks.
     """
     raw_text: str
+    source_plane: str = "unknown"
     max_len: int = 500
 
     @property
@@ -40,11 +41,25 @@ class UntrustedUIText:
             escaped = escaped[: self.max_len] + "... [truncated]"
         return escaped
 
+    def to_log_repr(self) -> str:
+        """Single-line log representation safe against log injection."""
+        return self.sanitized.replace("\n", " ").replace("\r", " ")
+
     def to_envelope(self) -> Dict[str, str]:
         """Wraps text in an untrusted data envelope."""
         return {
             "kind": "untrusted_ui_content",
             "content": self.sanitized,
+            "source_plane": self.source_plane,
+        }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Structured dictionary flagging content as untrusted."""
+        return {
+            "raw_text": self.raw_text,
+            "sanitized": self.sanitized,
+            "source_plane": self.source_plane,
+            "is_untrusted": True,
         }
 
     def __str__(self) -> str:

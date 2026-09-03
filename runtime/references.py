@@ -42,9 +42,23 @@ class Rect:
     def center(self) -> Tuple[int, int]:
         return (self.x + self.width // 2, self.y + self.height // 2)
 
+    @property
+    def area(self) -> int:
+        return max(0, self.width) * max(0, self.height)
+
     def contains(self, px: int, py: int) -> bool:
         """Returns True if point (px, py) is inside rectangle bounds."""
         return self.left <= px <= self.right and self.top <= py <= self.bottom
+
+    def intersection(self, other: Rect) -> Optional[Rect]:
+        """Calculates overlapping rectangle between self and other, or None if disjoint."""
+        ix1 = max(self.left, other.left)
+        iy1 = max(self.top, other.top)
+        ix2 = min(self.right, other.right)
+        iy2 = min(self.bottom, other.bottom)
+        if ix2 > ix1 and iy2 > iy1:
+            return Rect(x=ix1, y=iy1, width=ix2 - ix1, height=iy2 - iy1)
+        return None
 
     def to_dict(self) -> Dict[str, int]:
         return {
