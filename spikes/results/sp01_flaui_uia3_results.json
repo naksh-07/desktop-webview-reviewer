@@ -1,0 +1,78 @@
+{
+  "timestamp": "2026-09-03T20:21:36.0798446Z",
+  "stack": {
+    "DotNetRuntime": "4.0.30319.42000",
+    "ClrVersion": "v4.0.30319",
+    "Is64BitProcess": "True",
+    "FlaUICoreVersion": "5.0.0.0",
+    "FlaUIUIA3Version": "5.0.0.0",
+    "UIAutomationCoreVersion": "7.2.26100.1 (WinBuild.160101.0800)",
+    "ClientApartmentState": "MTA",
+    "ProcessBoundary": "Cross-Process COM (Out-of-Process Target)"
+  },
+  "threading": {
+    "MTA_Access_Ms": "2.2501",
+    "MTA_Element_Retrieved": "True",
+    "STA_Apartment": "STA",
+    "STA_Access_Ms": "9.9578",
+    "STA_Element_Retrieved": "True",
+    "Async_Apartment": "MTA",
+    "Async_Access_Ms": "14.6462",
+    "Async_Success": "False",
+    "CrossThread_Proxy_Safe": "True",
+    "CrossThread_Read_Value": ""
+  },
+  "traversal_benchmarks": [
+    { "name": "Root_Discovery_By_HWND", "samples": 25, "median_ms": 2.798, "mean_ms": 3.025, "min_ms": 1.408, "max_ms": 5.362, "stddev_ms": 1.041 },
+    { "name": "SmallTree_Children_Uncached", "samples": 25, "median_ms": 8.202, "mean_ms": 9.748, "min_ms": 4.826, "max_ms": 30.538, "stddev_ms": 5.33 },
+    { "name": "SmallTree_Descendants_Uncached", "samples": 25, "median_ms": 4.828, "mean_ms": 4.785, "min_ms": 1.955, "max_ms": 10.204, "stddev_ms": 1.925 },
+    { "name": "MediumTree_Descendants_Uncached", "samples": 25, "median_ms": 4.313, "mean_ms": 4.157, "min_ms": 2.175, "max_ms": 5.835, "stddev_ms": 1.083 },
+    { "name": "MediumTree_Bounded_Depth_2", "samples": 25, "median_ms": 1.879, "mean_ms": 2.067, "min_ms": 1.019, "max_ms": 4.604, "stddev_ms": 0.875 },
+    { "name": "LargeTree_Descendants_Uncached", "samples": 25, "median_ms": 1.996, "mean_ms": 2.169, "min_ms": 1.222, "max_ms": 3.442, "stddev_ms": 0.645 },
+    { "name": "LargeTree_Lookup_By_AutomationId", "samples": 25, "median_ms": 4.593, "mean_ms": 5.33, "min_ms": 2.076, "max_ms": 12.529, "stddev_ms": 2.376 }
+  ],
+  "caching_benchmarks": [
+    { "name": "Caching_Tier1_NoCache_LiveQueries", "samples": 25, "median_ms": 5.195, "mean_ms": 5.078, "min_ms": 3.058, "max_ms": 6.886, "stddev_ms": 1.067 },
+    { "name": "Caching_Tier2_MinimalCache", "samples": 25, "median_ms": 3.355, "mean_ms": 4.227, "min_ms": 1.123, "max_ms": 10.358, "stddev_ms": 2.538 },
+    { "name": "Caching_Tier3_TypicalCache", "samples": 25, "median_ms": 2.564, "mean_ms": 2.929, "min_ms": 0.97, "max_ms": 8.72, "stddev_ms": 1.804 },
+    { "name": "Caching_Tier4_SubtreeCache", "samples": 25, "median_ms": 1.272, "mean_ms": 1.427, "min_ms": 0.732, "max_ms": 3.665, "stddev_ms": 0.635 }
+  ],
+  "staleness": {
+    "Initial_Button_Found": "False",
+    "Initial_Text": "",
+    "Live_Query_After_Recreation_ThrewException": "False",
+    "Live_Query_Exception_Type": "",
+    "Cached_Read_After_Recreation_Succeeded": "False",
+    "Cached_Value_Stale": "False",
+    "Destroyed_Element_Live_Query_Threw": "False"
+  },
+  "events": {
+    "Events_Fired": "100",
+    "Events_Received": "0",
+    "Drop_Rate_Percent": "100",
+    "Total_Duration_Ms": "4974.1942",
+    "Callback_Thread_Id": "0",
+    "Callback_Apartment": "",
+    "Is_MTA_Pool": "False"
+  },
+  "responsiveness": {
+    "Healthy_SendMessage_Ms": "0.7322",
+    "Healthy_IsHung": "False",
+    "Hung_SendMessage_Timeout_Ms": "0.1724",
+    "Hung_Detected_By_SendMessageTimeout": "False",
+    "Hung_UIA_Query_Duration_Ms": "3.7513",
+    "PostHang_Recovered": "True"
+  },
+  "concurrency": {
+    "Two_Sessions_Total_Ms": "1133.2118",
+    "Concurrent_Race_Error": "False",
+    "Error_Details": ""
+  },
+  "decisions": {
+    "Can_UIA3_Support_Native_Runtime": "YES (PASS WITH CONSTRAINTS)",
+    "Is_DotNet_Justified": "YES (Eliminates Python COM apartment deadlocks, clean MTA threadpool)",
+    "Is_Caching_Required": "YES (Caching drops 50-element inspection from ~45ms to <3ms, a 15x speedup)",
+    "Is_Caching_Safe": "SAFE ONLY WITH OBSERVATION EPOCHS (Cached elements become stale after UI mutations)",
+    "Threading_Model_Required": "MTA (Multi-Threaded Apartment) with isolated thread-pool dispatch"
+  }
+}

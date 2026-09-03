@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SP-02 Chromium A11y Test Target - Page A</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        .box { padding: 10px; margin: 10px 0; border: 1px solid #ccc; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 id="page-title">SP-02 Accessibility Test - Page A</h1>
+        <nav>
+            <a id="nav-link-b" href="page_b.html">Go to Page B</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="box">
+            <h2>Interactive Controls</h2>
+            <button id="btn-primary" aria-label="Submit Order">Submit</button>
+            <input type="text" id="input-username" placeholder="Username" aria-required="true" />
+            <label><input type="checkbox" id="chk-terms" /> Agree to Terms</label>
+        </div>
+
+        <div class="box" id="dynamic-container">
+            <h2>Dynamic Node Container</h2>
+            <div id="dynamic-items">
+                <div class="item" role="listitem">Initial Static Item</div>
+            </div>
+        </div>
+
+        <div class="box">
+            <h2>Embedded Subframe</h2>
+            <iframe id="test-iframe" src="frame_inner.html" width="400" height="150"></iframe>
+        </div>
+    </main>
+
+    <script>
+        // Helper to perform burst mutations
+        window.performMutations = function(count) {
+            const container = document.getElementById("dynamic-items");
+            container.innerHTML = "";
+            for (let i = 0; i < count; i++) {
+                const el = document.createElement("button");
+                el.id = "dyn-btn-" + i;
+                el.innerText = "Dynamic Button " + i;
+                el.setAttribute("aria-label", "Dynamic Button " + i);
+                container.appendChild(el);
+            }
+            return count;
+        };
+    </script>
+</body>
+</html>

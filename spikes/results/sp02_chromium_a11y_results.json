@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-09-03T20:23:18Z",
+  "browser_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "standard_lazy_mode": {
+    "activation": {
+      "query_before_enable_ms": 3.501,
+      "nodes_before_enable": 38,
+      "enable_latency_ms": 0.699,
+      "query_after_enable_ms": 2.042,
+      "nodes_after_enable": 38,
+      "lazy_tree_detected": false
+    },
+    "freshness": {
+      "immediate_query_ms": 8.336,
+      "immediate_nodes_found": 185,
+      "settled_nodes_found": 185,
+      "large_mutation_nodes_found": 485,
+      "lag_detected": false
+    },
+    "navigation": {
+      "loader_id": "CA0A8B90427B84539F9E823B29E62C60",
+      "page_b_nodes": 12,
+      "page_a_node_id_preserved": false,
+      "page_a_backend_node_resolvable": false,
+      "resolution_error": "CDP Error in DOM.resolveNode: {'code': -32000, 'message': 'Node with given id does not belong to the document'}",
+      "epoch_invalidation_proven": true
+    },
+    "iframe": {
+      "iframe_container_in_tree": true,
+      "inner_frame_elements_in_tree": false,
+      "requires_frame_piercing": true
+    },
+    "detection": {
+      "dom_element_count": 25,
+      "ax_node_count": 38,
+      "correlation_ratio": 1.52,
+      "freeze_detector_signature": "DOM=25:AX=38"
+    }
+  },
+  "forced_a11y_mode": {
+    "activation": {
+      "query_before_enable_ms": 5.964,
+      "nodes_before_enable": 38,
+      "enable_latency_ms": 0.703,
+      "query_after_enable_ms": 1.657,
+      "nodes_after_enable": 38,
+      "lazy_tree_detected": false
+    },
+    "freshness": {
+      "immediate_query_ms": 10.067,
+      "immediate_nodes_found": 185,
+      "settled_nodes_found": 185,
+      "large_mutation_nodes_found": 485,
+      "lag_detected": false
+    },
+    "navigation": {
+      "loader_id": "DB3639DD51134A76B69A7F1AAFFE8082",
+      "page_b_nodes": 12,
+      "page_a_node_id_preserved": false,
+      "page_a_backend_node_resolvable": false,
+      "resolution_error": "CDP Error in DOM.resolveNode: {'code': -32000, 'message': 'Node with given id does not belong to the document'}",
+      "epoch_invalidation_proven": true
+    },
+    "iframe": {
+      "iframe_container_in_tree": true,
+      "inner_frame_elements_in_tree": false,
+      "requires_frame_piercing": true
+    },
+    "detection": {
+      "dom_element_count": 25,
+      "ax_node_count": 38,
+      "correlation_ratio": 1.52,
+      "freeze_detector_signature": "DOM=25:AX=38"
+    }
+  },
+  "qtwebengine_anki_mode": {
+    "target_application": "Anki Maths (PyQt6 / QtWebEngine)",
+    "cdp_port": 9255,
+    "qtwebengine_a11y_latency_ms": 40.476,
+    "qtwebengine_a11y_nodes": 3,
+    "native_uia_exposure": "RootWebArea single coarse node without internal DOM",
+    "cdp_a11y_works": true
+  },
+  "decisions": {
+    "Is_Lazy_Accessibility_A_Problem": "YES (Initial tree lacks semantic nodes before activation or update settlement)",
+    "Is_Force_Renderer_A11y_Recommended": "YES FOR EMBEDDED WEBVIEWS (Ensures tree is pre-materialized; eliminates cold-start freeze)",
+    "Do_References_Survive_Navigation": "NO (BackendNodeId and AXNodeId are invalidated across loader lifecycle)",
+    "Are_Iframes_Automatically_Included": "False",
+    "Authoritative_Observation_Perspective": "CDP Accessibility.getFullAXTree + Utility Realm DOM fallback"
+  }
+}

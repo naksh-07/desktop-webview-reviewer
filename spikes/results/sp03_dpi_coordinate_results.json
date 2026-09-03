@@ -1,0 +1,463 @@
+{
+  "timestamp": "2026-09-03T20:26:25Z",
+  "dpi_awareness_context": "PER_MONITOR_AWARE_V2",
+  "virtual_screen": {
+    "x": 0,
+    "y": 0,
+    "width": 1920,
+    "height": 1080
+  },
+  "monitors": [
+    {
+      "device": "\\\\.\\DISPLAY1",
+      "is_primary": true,
+      "bounds": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "width": 1920,
+        "height": 1080
+      },
+      "work_area": {
+        "left": 0,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1008,
+        "width": 1920,
+        "height": 1008
+      },
+      "dpi": 144,
+      "scale_factor": 1.5
+    }
+  ],
+  "window_geometry_analysis": {
+    "hwnd": "0xf0fcc",
+    "window_dpi": 144,
+    "scale": 1.5,
+    "GetWindowRect": {
+      "left": 100,
+      "top": 100,
+      "right": 700,
+      "bottom": 500,
+      "width": 600,
+      "height": 400
+    },
+    "DwmExtendedFrameBounds": {
+      "left": 109,
+      "top": 100,
+      "right": 691,
+      "bottom": 491,
+      "width": 582,
+      "height": 391
+    },
+    "GetClientRect": {
+      "width": 578,
+      "height": 344
+    },
+    "ClientOriginScreen": {
+      "x": 111,
+      "y": 145
+    },
+    "DwmInvisibleShadowMargins": {
+      "left": 9,
+      "top": 0,
+      "right": 9,
+      "bottom": 9
+    },
+    "NonClientChrome": {
+      "title_bar_height": 45,
+      "left_border": 2
+    }
+  },
+  "fractional_scaling_matrix": {
+    "100%": {
+      "scale_factor": 1.0,
+      "max_rounding_error_logical_px": 0.0,
+      "max_sendinput_error_phys_px": 0.0,
+      "center_hit_test_safe": true,
+      "points": [
+        {
+          "point_desc": "Small Element Origin",
+          "logical_css": {
+            "x": 10,
+            "y": 10
+          },
+          "physical_device_pixels": {
+            "x": 10,
+            "y": 10
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 342,
+            "dy": 607
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Standard Button Center",
+          "logical_css": {
+            "x": 125,
+            "y": 45
+          },
+          "physical_device_pixels": {
+            "x": 125,
+            "y": 45
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 4269,
+            "dy": 2733
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Deep Nested Input",
+          "logical_css": {
+            "x": 333,
+            "y": 267
+          },
+          "physical_device_pixels": {
+            "x": 333,
+            "y": 267
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 11372,
+            "dy": 16217
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Viewport Bottom-Right",
+          "logical_css": {
+            "x": 800,
+            "y": 600
+          },
+          "physical_device_pixels": {
+            "x": 800,
+            "y": 600
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 27320,
+            "dy": 36442
+          },
+          "sendinput_physical_delta_px": 0.0
+        }
+      ]
+    },
+    "125%": {
+      "scale_factor": 1.25,
+      "max_rounding_error_logical_px": 0.4,
+      "max_sendinput_error_phys_px": 0.0,
+      "center_hit_test_safe": true,
+      "points": [
+        {
+          "point_desc": "Small Element Origin",
+          "logical_css": {
+            "x": 10,
+            "y": 10
+          },
+          "physical_device_pixels": {
+            "x": 12,
+            "y": 12
+          },
+          "round_trip_logical_error_px": 0.4,
+          "sendinput_normalized": {
+            "dx": 410,
+            "dy": 729
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Standard Button Center",
+          "logical_css": {
+            "x": 125,
+            "y": 45
+          },
+          "physical_device_pixels": {
+            "x": 156,
+            "y": 56
+          },
+          "round_trip_logical_error_px": 0.2,
+          "sendinput_normalized": {
+            "dx": 5327,
+            "dy": 3401
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Deep Nested Input",
+          "logical_css": {
+            "x": 333,
+            "y": 267
+          },
+          "physical_device_pixels": {
+            "x": 416,
+            "y": 334
+          },
+          "round_trip_logical_error_px": 0.2,
+          "sendinput_normalized": {
+            "dx": 14207,
+            "dy": 20286
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Viewport Bottom-Right",
+          "logical_css": {
+            "x": 800,
+            "y": 600
+          },
+          "physical_device_pixels": {
+            "x": 1000,
+            "y": 750
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 34151,
+            "dy": 45553
+          },
+          "sendinput_physical_delta_px": 0.0
+        }
+      ]
+    },
+    "150%": {
+      "scale_factor": 1.5,
+      "max_rounding_error_logical_px": 0.3333,
+      "max_sendinput_error_phys_px": 0.0,
+      "center_hit_test_safe": true,
+      "points": [
+        {
+          "point_desc": "Small Element Origin",
+          "logical_css": {
+            "x": 10,
+            "y": 10
+          },
+          "physical_device_pixels": {
+            "x": 15,
+            "y": 15
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 512,
+            "dy": 911
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Standard Button Center",
+          "logical_css": {
+            "x": 125,
+            "y": 45
+          },
+          "physical_device_pixels": {
+            "x": 188,
+            "y": 68
+          },
+          "round_trip_logical_error_px": 0.3333,
+          "sendinput_normalized": {
+            "dx": 6420,
+            "dy": 4130
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Deep Nested Input",
+          "logical_css": {
+            "x": 333,
+            "y": 267
+          },
+          "physical_device_pixels": {
+            "x": 500,
+            "y": 400
+          },
+          "round_trip_logical_error_px": 0.3333,
+          "sendinput_normalized": {
+            "dx": 17075,
+            "dy": 24295
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Viewport Bottom-Right",
+          "logical_css": {
+            "x": 800,
+            "y": 600
+          },
+          "physical_device_pixels": {
+            "x": 1200,
+            "y": 900
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 40981,
+            "dy": 54663
+          },
+          "sendinput_physical_delta_px": 0.0
+        }
+      ]
+    },
+    "175%": {
+      "scale_factor": 1.75,
+      "max_rounding_error_logical_px": 0.2857,
+      "max_sendinput_error_phys_px": 0.0,
+      "center_hit_test_safe": true,
+      "points": [
+        {
+          "point_desc": "Small Element Origin",
+          "logical_css": {
+            "x": 10,
+            "y": 10
+          },
+          "physical_device_pixels": {
+            "x": 18,
+            "y": 18
+          },
+          "round_trip_logical_error_px": 0.2857,
+          "sendinput_normalized": {
+            "dx": 615,
+            "dy": 1093
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Standard Button Center",
+          "logical_css": {
+            "x": 125,
+            "y": 45
+          },
+          "physical_device_pixels": {
+            "x": 219,
+            "y": 79
+          },
+          "round_trip_logical_error_px": 0.1429,
+          "sendinput_normalized": {
+            "dx": 7479,
+            "dy": 4798
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Deep Nested Input",
+          "logical_css": {
+            "x": 333,
+            "y": 267
+          },
+          "physical_device_pixels": {
+            "x": 583,
+            "y": 467
+          },
+          "round_trip_logical_error_px": 0.1429,
+          "sendinput_normalized": {
+            "dx": 19910,
+            "dy": 28364
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Viewport Bottom-Right",
+          "logical_css": {
+            "x": 800,
+            "y": 600
+          },
+          "physical_device_pixels": {
+            "x": 1400,
+            "y": 1050
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 47811,
+            "dy": 63774
+          },
+          "sendinput_physical_delta_px": 0.0
+        }
+      ]
+    },
+    "200%": {
+      "scale_factor": 2.0,
+      "max_rounding_error_logical_px": 0.0,
+      "max_sendinput_error_phys_px": 0.0,
+      "center_hit_test_safe": true,
+      "points": [
+        {
+          "point_desc": "Small Element Origin",
+          "logical_css": {
+            "x": 10,
+            "y": 10
+          },
+          "physical_device_pixels": {
+            "x": 20,
+            "y": 20
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 683,
+            "dy": 1215
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Standard Button Center",
+          "logical_css": {
+            "x": 125,
+            "y": 45
+          },
+          "physical_device_pixels": {
+            "x": 250,
+            "y": 90
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 8538,
+            "dy": 5466
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Deep Nested Input",
+          "logical_css": {
+            "x": 333,
+            "y": 267
+          },
+          "physical_device_pixels": {
+            "x": 666,
+            "y": 534
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 22744,
+            "dy": 32433
+          },
+          "sendinput_physical_delta_px": 0.0
+        },
+        {
+          "point_desc": "Viewport Bottom-Right",
+          "logical_css": {
+            "x": 800,
+            "y": 600
+          },
+          "physical_device_pixels": {
+            "x": 1600,
+            "y": 1200
+          },
+          "round_trip_logical_error_px": 0.0,
+          "sendinput_normalized": {
+            "dx": 54641,
+            "dy": 72884
+          },
+          "sendinput_physical_delta_px": 0.0
+        }
+      ]
+    }
+  },
+  "decisions": {
+    "Canonical_Coordinate_Space": "Physical Screen Pixels (Integers)",
+    "DPI_Awareness_Context_Required": "PER_MONITOR_DPI_AWARE_V2",
+    "DWM_Invisible_Border_Handling": "MUST crop/offset DWM drop shadows: L=9px, R=9px, B=9px",
+    "SendInput_Coordinate_Precision": "< 1.0 physical pixel accuracy across all scaling tiers",
+    "Hit_Test_Rounding_Safety": "100% Deterministic when targeting element center points",
+    "Dedicated_CoordinateTransform_Subsystem": "YES (Mandatory dedicated CoordinateTransform subsystem)"
+  }
+}
