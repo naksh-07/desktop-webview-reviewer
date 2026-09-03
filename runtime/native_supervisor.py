@@ -291,26 +291,27 @@ class NativeModalReport:
 @dataclass
 class WindowForensicReport:
     """Forensic report capturing physical desktop truth for a window handle."""
-    hwnd: int
-    pid: int
-    title: str
-    class_name: str
-    bounds: Rect                   # Canonical physical bounds via DWMWA_EXTENDED_FRAME_BOUNDS (AUTHORITATIVE)
-    raw_window_rect: Rect          # Raw GetWindowRect (DIAGNOSTIC ONLY; includes drop-shadows)
-    client_rect: Rect              # Client bounds via GetClientRect
-    client_origin_screen: Tuple[int, int] # Screen origin of client (0,0) via ClientToScreen
-    is_valid_window: bool
-    is_visible: bool
-    is_iconic: bool                # Minimized
-    is_cloaked: bool               # DWM virtual desktop / hidden
-    is_hung: bool                  # SendMessageTimeout(WM_NULL) check failed
-    health_state: HealthState
-    dpi_scaling: float             # Per-Monitor V2 scaling factor (e.g. 1.25)
-    shadow_margins: Dict[str, int] # Drop shadow margins: left, top, right, bottom
+    hwnd: int = 0
+    pid: int = 0
+    title: str = ""
+    class_name: str = ""
+    bounds: Rect = field(default_factory=lambda: Rect(0, 0, 0, 0))
+    raw_window_rect: Rect = field(default_factory=lambda: Rect(0, 0, 0, 0))
+    client_rect: Rect = field(default_factory=lambda: Rect(0, 0, 0, 0))
+    client_origin_screen: Tuple[int, int] = (0, 0)
+    is_valid_window: bool = True
+    is_visible: bool = True
+    is_iconic: bool = False
+    is_cloaked: bool = False
+    is_hung: bool = False
+    health_state: HealthState = HealthState.HEALTHY
+    dpi_scaling: float = 1.0
+    shadow_margins: Dict[str, int] = field(default_factory=lambda: {"left": 0, "top": 0, "right": 0, "bottom": 0})
     responsiveness: Optional[ResponsivenessReport] = None
     visibility: Optional[PhysicalVisibilityReport] = None
     occlusion: Optional[OcclusionReport] = None
     modals: Optional[NativeModalReport] = None
+    is_enabled: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1350,6 +1351,30 @@ class NativeOSSupervisor:
             return bool(w32.user32.IsWindowVisible(w32.wintypes.HWND(hwnd)))
         except Exception:
             return False
+
+    @classmethod
+    def bring_to_foreground(cls, hwnd: int) -> bool:
+        """Brings the specified window handle to the foreground and activates it."""
+        if sys.platform != "win32" or w32.user32 is None:
+            return False
+        try:
+            if w32.user32.IsIconic(w32.wintypes.HWND(hwnd)):
+                w32.user32.ShowWindow(w32.wintypes.HWND(hwnd), 9)  # SW_RESTORE
+            return bool(w32.user32.SetForegroundWindow(w32.wintypes.HWND(hwnd)))
+        except Exception as e:
+            logger.warning(f"Failed to bring HWND {hex(hwnd)} to foreground: {e}")
+            return False
+
+    @classmethod
+    def get_foreground_window(cls) -> Optional[int]:
+        """Returns the current foreground window handle."""
+        if sys.platform != "win32" or w32.user32 is None:
+            return None
+        try:
+            hwnd = w32.user32.GetForegroundWindow()
+            return int(hwnd) if hwnd else None
+        except Exception:
+            return None
 
 
 # Backward-compatible and semantic alias

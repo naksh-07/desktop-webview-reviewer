@@ -342,7 +342,7 @@ The system uses a strict tripartite verdict model:
 
 ### 10.1 Spawning & Job Control
 * **[CODE FACT]** `ProcessLauncher.launch` (`launchers/process_launcher.py#L88-L102`) launches processes using:
-  ```python
+  ```text
   creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
   process = subprocess.Popen(
       cmd,
@@ -362,7 +362,7 @@ The system uses a strict tripartite verdict model:
   Uses `psutil.Process(root_pid).children(recursive=True)` to discover multi-process renderer trees.
 * **[CODE FACT]** `ProcessCleanup.terminate_process_tree` (`core/cleanup.py#L38-L109`):
   Enforces PID reuse protection:
-  ```python
+  ```text
   if expected_create_time is not None:
       actual_create_time = parent.create_time()
       if abs(actual_create_time - expected_create_time) > 5.0:
@@ -439,7 +439,7 @@ The system uses a strict tripartite verdict model:
 
 ### 12.2 The Critical CLI Regressive Deadlock
 * **[CODE FACT]** In `scripts/review.py#L208-L224`:
-  ```python
+  ```text
   report = await collector.build_report(
       screenshot_path=screenshot_path,
       assertions=assertions.history,

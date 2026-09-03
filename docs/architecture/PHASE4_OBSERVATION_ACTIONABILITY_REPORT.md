@@ -35,7 +35,7 @@ All findings in this report strictly adhere to the six-tier truth taxonomy:
 ### 3.1 Strict Invariant: No Lowest-Common-Denominator Element
 [FACT] `UniversalUIElement` or equivalent unified tree abstractions are strictly prohibited by Architecture H.  
 [FACT] `NativeElementObservation` and `WebElementObservation` are independent immutable dataclasses:
-```python
+```text
 @dataclass(frozen=True)
 class NativeElementObservation:
     session_id: str

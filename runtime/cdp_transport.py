@@ -496,6 +496,11 @@ class MockCDPTransport(ICDPTransport):
                 }
             ]
         }
+        self._handlers["Input.dispatchMouseEvent"] = lambda p: {}
+        self._handlers["Input.dispatchKeyEvent"] = lambda p: {}
+        self._handlers["Input.insertText"] = lambda p: {}
+        self._handlers["DOM.focus"] = lambda p: {}
+
 
     def register_handler(self, method: str, handler: Callable[[Dict[str, Any]], Any]) -> None:
         """Overrides or adds a command handler."""

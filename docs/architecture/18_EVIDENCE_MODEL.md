@@ -54,7 +54,7 @@ Tripartite Verdict Model
 
 ### 3.1 Forensic Diagnosis from Track 09
 Between commit `d90e5b0` and commit `c7dd3bb`, an ad-hoc regex patch (`patch_evidence.py`) mutated `core/evidence.py` to enforce that `Verdict.PASS` strictly requires:
-```python
+```text
 # The defect in core/evidence.py
 if not (user_confirmation and input_delivery_verified and has_three_screenshots):
     return Verdict.UNVERIFIED
@@ -64,7 +64,7 @@ However, the CLI test runner (`scripts/review.py`) was never updated to supply `
 ### 3.2 Architectural Remedy
 The Evidence Engine decouples **Interactive Human Confirmation** from **Automated Dual-Perspective Proof**:
 
-```python
+```text
 def evaluate_verdict(
     window_forensics: WindowForensicReport,
     proof_metrics: ProofMetrics,

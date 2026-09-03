@@ -118,6 +118,12 @@ class CDPTargetManager:
         return None
 
     @property
+    def active_target_id(self) -> Optional[str]:
+        """Returns the target ID of the primary active target if available."""
+        target = self.primary_target
+        return target.target_id if target else None
+
+    @property
     def correlation(self) -> Optional[EndpointProcessCorrelation]:
         return self._correlation
 

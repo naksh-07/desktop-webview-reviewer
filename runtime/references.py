@@ -124,7 +124,7 @@ class ReferenceRegistry:
     Enforces epoch invalidation on navigation, DOM mutation, or snapshot renewal.
     """
 
-    def __init__(self, session_id: str, initial_epoch: int = 1):
+    def __init__(self, session_id: str = "default_session", initial_epoch: int = 1):
         self.session_id = session_id
         self._current_epoch = initial_epoch
         # Maps ref_id -> ElementRef for current epoch
@@ -151,16 +151,17 @@ class ReferenceRegistry:
         backend_id: Optional[Any] = None,
         target_id: Optional[str] = None,
         confidence: float = 1.0,
+        ref_id: Optional[str] = None,
     ) -> ElementRef:
         """Creates and registers a synthetic reference for the current epoch."""
         prefix = "w" if (plane == TargetPlane.WEBVIEW_DOM or str(plane) == "WEBVIEW_DOM") else "n"
         idx = custom_index if custom_index is not None else (len(self._active_refs) + 1)
-        ref_id = f"{prefix}{self._current_epoch}e{idx}"
+        final_ref_id = ref_id if ref_id is not None else f"{prefix}{self._current_epoch}e{idx}"
 
         actual_bounds = bounds if bounds is not None else Rect(0, 0, 0, 0)
         ref = ElementRef(
             epoch_id=self._current_epoch,
-            ref_id=ref_id,
+            ref_id=final_ref_id,
             plane=plane,
             role=role,
             name=name,
@@ -171,7 +172,7 @@ class ReferenceRegistry:
             target_id=target_id,
             confidence=confidence,
         )
-        self._active_refs[ref_id] = ref
+        self._active_refs[final_ref_id] = ref
         return ref
 
     def add_explicit_ref(self, ref: ElementRef) -> None:

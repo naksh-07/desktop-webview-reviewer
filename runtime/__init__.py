@@ -176,6 +176,34 @@ from runtime.observation_security import (
     sanitize_observed_text,
     create_safe_ui_envelope,
 )
+# Phase 5: Action Execution Engine
+from runtime.action_models import (
+    ActionType,
+    DispatchMethod,
+    ActionRiskLevel,
+    DispatchStatus,
+    ActionOutcomeStatus,
+    StateChangeClassification,
+    ActionTarget,
+    ActionPreconditions,
+    ActionRequest,
+    ActionReceipt,
+    ActionOutcome,
+)
+from runtime.native_input import (
+    NativeInputDispatcher,
+    MouseButton,
+    KeyAction,
+    DispatchedInputRecord,
+)
+from runtime.settlement import (
+    SettlementType,
+    SettlementResult,
+    SettlementEngine,
+)
+from runtime.web_action_executor import WebActionExecutor
+from runtime.native_action_executor import NativeActionExecutor
+from runtime.action_engine import ActionExecutionEngine
 
 __all__ = [
     # State & Enums
@@ -341,5 +369,27 @@ __all__ = [
     "LifecycleEvent",
     "EventAuditor",
     "UntrustedUIText",
+    # Phase 5: Action Models & Engine
+    "ActionType",
+    "DispatchMethod",
+    "ActionRiskLevel",
+    "DispatchStatus",
+    "ActionOutcomeStatus",
+    "StateChangeClassification",
+    "ActionTarget",
+    "ActionPreconditions",
+    "ActionRequest",
+    "ActionReceipt",
+    "ActionOutcome",
+    "NativeInputDispatcher",
+    "MouseButton",
+    "KeyAction",
+    "DispatchedInputRecord",
+    "SettlementType",
+    "SettlementResult",
+    "SettlementEngine",
+    "WebActionExecutor",
+    "NativeActionExecutor",
+    "ActionExecutionEngine",
 ]
 

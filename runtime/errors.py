@@ -511,3 +511,47 @@ class CrossDomainFrameAccessException(DesktopAutomationException):
         self.frame_id = frame_id
         self.security_origin = security_origin
 
+
+class ActionNotReadyException(DesktopAutomationException):
+    """Element failed one or more actionability preconditions within the allowed timeout."""
+
+    def __init__(self, ref_id: str, reasons: Optional[list[str]] = None, details: Optional[Dict[str, Any]] = None):
+        reason_str = "; ".join(reasons or []) if reasons else "Actionability check failed."
+        super().__init__(
+            message=f"Element '{ref_id}' is not actionable: {reason_str}",
+            code="ACTION_NOT_READY",
+            recoverable=True,
+            agent_action_hint="Wait for animations to complete, element to become visible/enabled, or re-inspect target.",
+            details={"ref_id": ref_id, "reasons": reasons or [], **(details or {})},
+        )
+        self.ref_id = ref_id
+        self.reasons = reasons or []
+
+
+class ActionExecutionException(DesktopAutomationException):
+    """Action dispatch or execution failed unexpectedly."""
+
+    def __init__(self, message: str, action_type: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            code="ACTION_EXECUTION_FAILED",
+            recoverable=False,
+            agent_action_hint="Check application responsiveness, target attachment, and coordinate bounds.",
+            details={"action_type": action_type, **(details or {})},
+        )
+        self.action_type = action_type
+
+
+class ActionDispatchRejectedException(DesktopAutomationException):
+    """Action was rejected by physical safety policy or precondition gate."""
+
+    def __init__(self, message: str, code: str = "ACTION_DISPATCH_REJECTED", details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            code=code,
+            recoverable=False,
+            agent_action_hint="Inspect native window state (minimized, cloaked, hung, modal blocked).",
+            details=details or {},
+        )
+
+

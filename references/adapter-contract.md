@@ -4,7 +4,7 @@ All desktop webview engine adapters (`qtwebengine`, `webview2`, `electron`, `chr
 
 ## Required Abstract Methods
 
-```python
+```text
 class BaseEngineAdapter(ABC):
     @property
     @abstractmethod

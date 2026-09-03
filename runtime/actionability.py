@@ -41,6 +41,7 @@ class MotionStatus(str, Enum):
 class OverallActionabilityStatus(str, Enum):
     READY = "READY"
     NOT_READY = "NOT_READY"
+    NOT_ACTIONABLE = "NOT_ACTIONABLE"
     UNKNOWN = "UNKNOWN"
     TIMEOUT = "TIMEOUT"
     STALE = "STALE"
@@ -68,22 +69,77 @@ class GateReport:
 @dataclass(frozen=True)
 class ActionabilityResult:
     """Authoritative outcome of the composite 5-point actionability evaluation."""
-    ref_id: str
-    epoch: int
-    plane: TargetPlane
-    attachment: GateReport
-    visibility: GateReport
-    motion: GateReport
-    enabledness: GateReport
-    hit_test: GateReport
-    affordance_point: Optional[Tuple[int, int]]
-    affordance_point_type: str
-    physical_visibility: str
-    web_visibility: str
-    overall_status: OverallActionabilityStatus
-    is_actionable: bool
+    ref_id: str = ""
+    epoch: int = 1
+    plane: TargetPlane = TargetPlane.WEBVIEW_DOM
+    attachment: GateReport = field(default_factory=lambda: GateReport("attachment", GateStatus.PASSED, True, "ok"))
+    visibility: GateReport = field(default_factory=lambda: GateReport("visibility", GateStatus.PASSED, True, "ok"))
+    motion: GateReport = field(default_factory=lambda: GateReport("motion", GateStatus.PASSED, True, "ok"))
+    enabledness: GateReport = field(default_factory=lambda: GateReport("enabledness", GateStatus.PASSED, True, "ok"))
+    hit_test: GateReport = field(default_factory=lambda: GateReport("hit_test", GateStatus.PASSED, True, "ok"))
+    affordance_point: Optional[Tuple[int, int]] = None
+    affordance_point_type: str = "CENTER"
+    physical_visibility: str = "FULL"
+    web_visibility: str = "VISIBLE"
+    overall_status: OverallActionabilityStatus = OverallActionabilityStatus.READY
+    is_actionable: bool = True
     reasons: Tuple[str, ...] = field(default_factory=tuple)
     evaluated_at: float = field(default_factory=time.time)
+
+    def __init__(
+        self,
+        ref_id: str = "",
+        epoch: int = 1,
+        plane: TargetPlane = TargetPlane.WEBVIEW_DOM,
+        attachment: Any = None,
+        visibility: Any = None,
+        motion: Any = None,
+        enabledness: Any = None,
+        hit_test: Any = None,
+        affordance_point: Optional[Tuple[int, int]] = None,
+        affordance_point_type: str = "CENTER",
+        physical_visibility: str = "FULL",
+        web_visibility: str = "VISIBLE",
+        overall_status: OverallActionabilityStatus = OverallActionabilityStatus.READY,
+        is_actionable: bool = True,
+        reasons: Any = (),
+        evaluated_at: Optional[float] = None,
+        motion_stability: Any = None,
+    ):
+        object.__setattr__(self, "ref_id", ref_id)
+        object.__setattr__(self, "epoch", epoch)
+        object.__setattr__(self, "plane", plane)
+
+        default_gate = GateReport("gate", GateStatus.PASSED, True, "ok")
+
+        def _to_gate(g: Any, name: str) -> GateReport:
+            if isinstance(g, GateReport):
+                return g
+            if isinstance(g, GateStatus):
+                return GateReport(name, g, g == GateStatus.PASSED, "ok" if g == GateStatus.PASSED else "failed")
+            if isinstance(g, MotionStatus):
+                passed = g == MotionStatus.STABLE
+                return GateReport(name, GateStatus.PASSED if passed else GateStatus.FAILED, passed, g.value)
+            return default_gate
+
+        object.__setattr__(self, "attachment", _to_gate(attachment, "attachment"))
+        object.__setattr__(self, "visibility", _to_gate(visibility, "visibility"))
+        actual_motion = motion if motion is not None else motion_stability
+        object.__setattr__(self, "motion", _to_gate(actual_motion, "motion"))
+        object.__setattr__(self, "enabledness", _to_gate(enabledness, "enabledness"))
+        object.__setattr__(self, "hit_test", _to_gate(hit_test, "hit_test"))
+        object.__setattr__(self, "affordance_point", tuple(affordance_point) if affordance_point else None)
+        object.__setattr__(self, "affordance_point_type", affordance_point_type)
+        object.__setattr__(self, "physical_visibility", physical_visibility)
+        object.__setattr__(self, "web_visibility", web_visibility)
+        object.__setattr__(self, "overall_status", overall_status)
+        object.__setattr__(self, "is_actionable", is_actionable)
+        object.__setattr__(self, "reasons", tuple(reasons) if isinstance(reasons, (list, tuple)) else (str(reasons),))
+        object.__setattr__(self, "evaluated_at", evaluated_at if evaluated_at is not None else time.time())
+
+    @property
+    def motion_stability(self) -> GateReport:
+        return self.motion
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -118,11 +174,13 @@ class ActionabilityEngine:
         native_supervisor: NativeSupervisor,
         webview_core: Optional[WebviewAutomationCore] = None,
         flaui_bridge: Optional[FlaUIBridge] = None,
+        session_id: Optional[str] = None,
     ):
         self.reference_registry = reference_registry
         self.native_supervisor = native_supervisor
         self.webview_core = webview_core
         self.flaui_bridge = flaui_bridge
+        self.session_id = session_id or getattr(reference_registry, "session_id", "default")
 
     async def evaluate_actionability(
         self,
