@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-03T20:26:25Z",
+  "timestamp": "2026-09-03T21:39:29Z",
   "dpi_awareness_context": "PER_MONITOR_AWARE_V2",
   "virtual_screen": {
     "x": 0,
@@ -32,7 +32,7 @@
     }
   ],
   "window_geometry_analysis": {
-    "hwnd": "0xf0fcc",
+    "hwnd": "0x431030",
     "window_dpi": 144,
     "scale": 1.5,
     "GetWindowRect": {
@@ -80,8 +80,8 @@
         {
           "point_desc": "Small Element Origin",
           "logical_css": {
-            "x": 10,
-            "y": 10
+            "x": 10.0,
+            "y": 10.0
           },
           "physical_device_pixels": {
             "x": 10,
@@ -97,8 +97,8 @@
         {
           "point_desc": "Standard Button Center",
           "logical_css": {
-            "x": 125,
-            "y": 45
+            "x": 125.0,
+            "y": 45.0
           },
           "physical_device_pixels": {
             "x": 125,
@@ -114,8 +114,8 @@
         {
           "point_desc": "Deep Nested Input",
           "logical_css": {
-            "x": 333,
-            "y": 267
+            "x": 333.0,
+            "y": 267.0
           },
           "physical_device_pixels": {
             "x": 333,
@@ -131,8 +131,8 @@
         {
           "point_desc": "Viewport Bottom-Right",
           "logical_css": {
-            "x": 800,
-            "y": 600
+            "x": 800.0,
+            "y": 600.0
           },
           "physical_device_pixels": {
             "x": 800,
@@ -156,8 +156,8 @@
         {
           "point_desc": "Small Element Origin",
           "logical_css": {
-            "x": 10,
-            "y": 10
+            "x": 10.0,
+            "y": 10.0
           },
           "physical_device_pixels": {
             "x": 12,
@@ -173,8 +173,8 @@
         {
           "point_desc": "Standard Button Center",
           "logical_css": {
-            "x": 125,
-            "y": 45
+            "x": 125.0,
+            "y": 45.0
           },
           "physical_device_pixels": {
             "x": 156,
@@ -190,8 +190,8 @@
         {
           "point_desc": "Deep Nested Input",
           "logical_css": {
-            "x": 333,
-            "y": 267
+            "x": 333.0,
+            "y": 267.0
           },
           "physical_device_pixels": {
             "x": 416,
@@ -207,8 +207,8 @@
         {
           "point_desc": "Viewport Bottom-Right",
           "logical_css": {
-            "x": 800,
-            "y": 600
+            "x": 800.0,
+            "y": 600.0
           },
           "physical_device_pixels": {
             "x": 1000,
@@ -232,8 +232,8 @@
         {
           "point_desc": "Small Element Origin",
           "logical_css": {
-            "x": 10,
-            "y": 10
+            "x": 10.0,
+            "y": 10.0
           },
           "physical_device_pixels": {
             "x": 15,
@@ -249,8 +249,8 @@
         {
           "point_desc": "Standard Button Center",
           "logical_css": {
-            "x": 125,
-            "y": 45
+            "x": 125.0,
+            "y": 45.0
           },
           "physical_device_pixels": {
             "x": 188,
@@ -266,8 +266,8 @@
         {
           "point_desc": "Deep Nested Input",
           "logical_css": {
-            "x": 333,
-            "y": 267
+            "x": 333.0,
+            "y": 267.0
           },
           "physical_device_pixels": {
             "x": 500,
@@ -283,8 +283,8 @@
         {
           "point_desc": "Viewport Bottom-Right",
           "logical_css": {
-            "x": 800,
-            "y": 600
+            "x": 800.0,
+            "y": 600.0
           },
           "physical_device_pixels": {
             "x": 1200,
@@ -308,8 +308,8 @@
         {
           "point_desc": "Small Element Origin",
           "logical_css": {
-            "x": 10,
-            "y": 10
+            "x": 10.0,
+            "y": 10.0
           },
           "physical_device_pixels": {
             "x": 18,
@@ -325,8 +325,8 @@
         {
           "point_desc": "Standard Button Center",
           "logical_css": {
-            "x": 125,
-            "y": 45
+            "x": 125.0,
+            "y": 45.0
           },
           "physical_device_pixels": {
             "x": 219,
@@ -342,8 +342,8 @@
         {
           "point_desc": "Deep Nested Input",
           "logical_css": {
-            "x": 333,
-            "y": 267
+            "x": 333.0,
+            "y": 267.0
           },
           "physical_device_pixels": {
             "x": 583,
@@ -359,8 +359,8 @@
         {
           "point_desc": "Viewport Bottom-Right",
           "logical_css": {
-            "x": 800,
-            "y": 600
+            "x": 800.0,
+            "y": 600.0
           },
           "physical_device_pixels": {
             "x": 1400,
@@ -384,8 +384,8 @@
         {
           "point_desc": "Small Element Origin",
           "logical_css": {
-            "x": 10,
-            "y": 10
+            "x": 10.0,
+            "y": 10.0
           },
           "physical_device_pixels": {
             "x": 20,
@@ -401,8 +401,8 @@
         {
           "point_desc": "Standard Button Center",
           "logical_css": {
-            "x": 125,
-            "y": 45
+            "x": 125.0,
+            "y": 45.0
           },
           "physical_device_pixels": {
             "x": 250,
@@ -418,8 +418,8 @@
         {
           "point_desc": "Deep Nested Input",
           "logical_css": {
-            "x": 333,
-            "y": 267
+            "x": 333.0,
+            "y": 267.0
           },
           "physical_device_pixels": {
             "x": 666,
@@ -435,8 +435,8 @@
         {
           "point_desc": "Viewport Bottom-Right",
           "logical_css": {
-            "x": 800,
-            "y": 600
+            "x": 800.0,
+            "y": 600.0
           },
           "physical_device_pixels": {
             "x": 1600,

@@ -137,6 +137,19 @@ class StaleReferenceException(DesktopAutomationException):
         self.ref_epoch = ref_epoch
 
 
+class NativeBridgeException(DesktopAutomationException):
+    """Failure communicating with or executing within out-of-process native UIA bridge."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            code="NATIVE_BRIDGE_ERROR",
+            recoverable=True,
+            agent_action_hint="Check if the .NET FlaUI sidecar binary is built and responsive.",
+            details=details or {},
+        )
+
+
 class TransportErrorException(DesktopAutomationException):
     """Failure communicating across IPC transport (Named Pipe / stdio)."""
 
@@ -250,16 +263,46 @@ class CleanupErrorException(DesktopAutomationException):
 class TargetAmbiguousException(DesktopAutomationException):
     """Locator resolved to multiple matching elements in strict mode."""
 
-    def __init__(self, locator: str, match_count: int):
+    def __init__(
+        self,
+        locator_or_message: str = "",
+        match_count_or_candidates: Optional[Any] = None,
+        candidates: Optional[Any] = None,
+        query: Optional[Any] = None,
+        remediation: str = "Specify unique text, role, or explicit index.",
+        message: Optional[str] = None,
+        **kwargs,
+    ):
+        if isinstance(match_count_or_candidates, int):
+            locator = locator_or_message
+            match_count = match_count_or_candidates
+            cand_list = list(candidates) if candidates else []
+            msg = message or f"Query '{locator}' resolved to {match_count} elements. Strict mode requires a unique match."
+        else:
+            msg = message or locator_or_message
+            cand_list = list(match_count_or_candidates or candidates or [])
+            match_count = len(cand_list)
+            locator = str(query or "")
+
         super().__init__(
-            message=f"Query '{locator}' resolved to {match_count} elements. Strict mode requires a unique match.",
+            message=msg,
             code="TARGET_AMBIGUOUS",
             recoverable=True,
-            agent_action_hint="Refine locator with get_by_role, index, or unique text.",
-            details={"locator": locator, "match_count": match_count},
+            agent_action_hint=remediation,
+            details={
+                "locator": locator,
+                "candidates": cand_list,
+                "candidate_count": match_count,
+                "query": query or {},
+                "remediation": remediation,
+                **kwargs,
+            },
         )
         self.locator = locator
         self.match_count = match_count
+        self.candidates = cand_list
+        self.query = query or {}
+        self.remediation = remediation
 
 
 class WindowCloakedException(DesktopAutomationException):

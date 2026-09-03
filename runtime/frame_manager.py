@@ -108,6 +108,11 @@ class FrameManager:
             return self._frames[self._root_frame_id]
         return None
 
+    @property
+    def frames(self) -> Dict[str, FrameContext]:
+        """Dictionary of all tracked frames mapped by frame_id."""
+        return dict(self._frames)
+
     # -------------------------------------------------------------------------
     # 1. Lifecycle Event Subscriptions
     # -------------------------------------------------------------------------

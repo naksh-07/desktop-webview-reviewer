@@ -26,6 +26,7 @@ release-validation/
 
 # Compiled binaries and .NET build artifacts
 *.exe
+*.dll
 bin/
 obj/
 *.egg-info/

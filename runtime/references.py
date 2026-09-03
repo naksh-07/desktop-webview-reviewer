@@ -5,7 +5,7 @@ Ensures references are strictly epoch-scoped, preventing stale node reuse across
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Any
 import logging
 from runtime.state import TargetPlane
@@ -95,6 +95,10 @@ class ElementRef:
     name: Optional[str]
     bounds: Rect
     locator_recipe: Optional[Dict[str, Any]] = None
+    frame_id: Optional[str] = None
+    backend_id: Optional[Any] = None
+    target_id: Optional[str] = None
+    confidence: float = 1.0
     created_at: datetime = field(default_factory=datetime.utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -106,6 +110,10 @@ class ElementRef:
             "name": self.name,
             "bounds": self.bounds.to_dict(),
             "locator_recipe": self.locator_recipe,
+            "frame_id": self.frame_id,
+            "backend_id": str(self.backend_id) if self.backend_id is not None else None,
+            "target_id": self.target_id,
+            "confidence": self.confidence,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -124,7 +132,7 @@ class ReferenceRegistry:
         # Historical registry of previous epoch refs for diagnostics & fallback
         self._stale_refs: Dict[str, ElementRef] = {}
         self._epoch_history: List[Dict[str, Any]] = [
-            {"epoch": initial_epoch, "reason": "initialization", "timestamp": datetime.utcnow()}
+            {"epoch": initial_epoch, "reason": "initialization", "timestamp": datetime.now(timezone.utc)}
         ]
 
     @property
@@ -135,24 +143,33 @@ class ReferenceRegistry:
         self,
         plane: TargetPlane,
         role: str,
-        name: Optional[str],
-        bounds: Rect,
+        name: Optional[str] = None,
+        bounds: Optional[Rect] = None,
         locator_recipe: Optional[Dict[str, Any]] = None,
         custom_index: Optional[int] = None,
+        frame_id: Optional[str] = None,
+        backend_id: Optional[Any] = None,
+        target_id: Optional[str] = None,
+        confidence: float = 1.0,
     ) -> ElementRef:
         """Creates and registers a synthetic reference for the current epoch."""
-        prefix = "w" if plane == TargetPlane.WEBVIEW_DOM else "n"
+        prefix = "w" if (plane == TargetPlane.WEBVIEW_DOM or str(plane) == "WEBVIEW_DOM") else "n"
         idx = custom_index if custom_index is not None else (len(self._active_refs) + 1)
         ref_id = f"{prefix}{self._current_epoch}e{idx}"
 
+        actual_bounds = bounds if bounds is not None else Rect(0, 0, 0, 0)
         ref = ElementRef(
             epoch_id=self._current_epoch,
             ref_id=ref_id,
             plane=plane,
             role=role,
             name=name,
-            bounds=bounds,
+            bounds=actual_bounds,
             locator_recipe=locator_recipe,
+            frame_id=frame_id,
+            backend_id=backend_id,
+            target_id=target_id,
+            confidence=confidence,
         )
         self._active_refs[ref_id] = ref
         return ref
@@ -207,10 +224,12 @@ class ReferenceRegistry:
         self._epoch_history.append({
             "epoch": self._current_epoch,
             "reason": reason,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
         })
         logger.debug(f"Session {self.session_id} epoch advanced to {self._current_epoch} ({reason})")
         return self._current_epoch
+
+    advance_epoch = increment_epoch
 
     def invalidate_for_navigation(self, url: str) -> int:
         """Invalidates references following target navigation."""
@@ -228,3 +247,53 @@ class ReferenceRegistry:
         """Clears all registered references and resets registry."""
         self._active_refs.clear()
         self._stale_refs.clear()
+
+    def create_cursor(
+        self,
+        target_id: str,
+        frame_id: str,
+        page: int,
+        page_size: int,
+    ) -> str:
+        """
+        Creates an opaque pagination cursor strictly scoped to session, epoch, target, and frame.
+        """
+        import base64
+        import json
+        payload = {
+            "session_id": self.session_id,
+            "epoch": self._current_epoch,
+            "target_id": target_id,
+            "frame_id": frame_id,
+            "page": page,
+            "page_size": page_size,
+        }
+        json_bytes = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return base64.urlsafe_b64encode(json_bytes).decode("ascii")
+
+    def validate_cursor(self, cursor_str: str) -> Dict[str, Any]:
+        """
+        Validates an opaque cursor against the active epoch.
+        Raises StaleReferenceException if the cursor is from a prior or invalid epoch.
+        """
+        import base64
+        import json
+        try:
+            json_bytes = base64.urlsafe_b64decode(cursor_str.encode("ascii"))
+            payload = json.loads(json_bytes.decode("utf-8"))
+        except Exception as e:
+            raise ValueError(f"Malformed pagination cursor: {e}")
+
+        cursor_epoch = payload.get("epoch")
+        if cursor_epoch != self._current_epoch:
+            raise StaleReferenceException(
+                ref_id=f"cursor_epoch_{cursor_epoch}",
+                current_epoch=self._current_epoch,
+                ref_epoch=cursor_epoch,
+            )
+
+        if payload.get("session_id") != self.session_id:
+            raise ValueError(f"Cursor session {payload.get('session_id')} does not match active session {self.session_id}")
+
+        return payload
+

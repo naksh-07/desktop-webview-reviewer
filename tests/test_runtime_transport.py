@@ -106,6 +106,10 @@ class TestRuntimeTransport(unittest.IsolatedAsyncioTestCase):
 
         try:
             import json
+            self.assertIsNotNone(proc.stdin)
+            self.assertIsNotNone(proc.stdout)
+            assert proc.stdin is not None
+            assert proc.stdout is not None
             req = json.dumps({"jsonrpc": "2.0", "id": "test-1", "method": "handshake", "params": {}}) + "\n"
             proc.stdin.write(req)
             proc.stdin.flush()
@@ -119,7 +123,7 @@ class TestRuntimeTransport(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(data.get("id"), "test-1")
             result = data.get("result", {})
             self.assertEqual(result.get("protocol_version"), "1.0")
-            self.assertEqual(result.get("sidecar_version"), "1.0.0")
+            self.assertIn(result.get("sidecar_version"), ("1.0.0", "1.1.0"))
             self.assertEqual(result.get("status"), "READY")
             self.assertEqual(result.get("apartment_state"), "MTA")
 

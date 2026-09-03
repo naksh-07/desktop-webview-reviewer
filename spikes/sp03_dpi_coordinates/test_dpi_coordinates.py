@@ -5,6 +5,12 @@ import math
 import os
 import sys
 import time
+from typing import TypedDict
+
+class TestPoint(TypedDict):
+    desc: str
+    x: float
+    y: float
 
 # Windows DPI Constants
 DPI_AWARENESS_CONTEXT_UNAWARE = ctypes.c_void_p(-1)
@@ -100,6 +106,9 @@ def enumerate_monitors():
     MONITORENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HMONITOR, wintypes.HDC, ctypes.POINTER(RECT), wintypes.LPARAM)
     user32.EnumDisplayMonitors(None, None, MONITORENUMPROC(callback), 0)
     return monitors
+
+# Global callback reference to prevent garbage collection by ctypes
+_wndproc_cb = None
 
 def create_calibration_window():
     # Simple Win32 window for geometry and DWM shadow analysis
@@ -206,11 +215,11 @@ def analyze_window_geometry(hwnd):
 
 def simulate_fractional_scaling_matrix():
     scales = [1.0, 1.25, 1.5, 1.75, 2.0]
-    test_points = [
-        {"desc": "Small Element Origin", "x": 10, "y": 10},
-        {"desc": "Standard Button Center", "x": 125, "y": 45},
-        {"desc": "Deep Nested Input", "x": 333, "y": 267},
-        {"desc": "Viewport Bottom-Right", "x": 800, "y": 600}
+    test_points: list[TestPoint] = [
+        {"desc": "Small Element Origin", "x": 10.0, "y": 10.0},
+        {"desc": "Standard Button Center", "x": 125.0, "y": 45.0},
+        {"desc": "Deep Nested Input", "x": 333.0, "y": 267.0},
+        {"desc": "Viewport Bottom-Right", "x": 800.0, "y": 600.0}
     ]
     v_screen = get_virtual_screen_bounds()
     matrix_results = {}

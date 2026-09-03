@@ -1311,3 +1311,46 @@ class NativeOSSupervisor:
             }
             for d in report.dialogs
         ]
+
+    @classmethod
+    def check_window_occlusion(cls, hwnd: int) -> OcclusionState:
+        """Convenience method returning OcclusionState."""
+        return cls.inspect_occlusion(hwnd).state
+
+    @classmethod
+    def scan_modal_dialogs(cls, target_pid: int) -> List[ModalDialogInfo]:
+        """Convenience method returning list of ModalDialogInfo."""
+        return cls.detect_modals(target_pid).dialogs
+
+    @classmethod
+    def is_window(cls, hwnd: int) -> bool:
+        """Validates if HWND is an existing Win32 window."""
+        return cls.is_window_valid(hwnd)
+
+    @classmethod
+    def is_window_enabled(cls, hwnd: int) -> bool:
+        """Queries Win32 IsWindowEnabled."""
+        try:
+            return bool(w32.user32.IsWindowEnabled(w32.wintypes.HWND(hwnd)))
+        except Exception:
+            return False
+
+    @classmethod
+    def find_windows_by_pid(cls, pid: int) -> List[int]:
+        """Returns all top-level window HWNDs associated with the specified PID."""
+        all_hwnds = cls.list_top_level_windows(visible_only=False)
+        return [h for h in all_hwnds if cls.get_window_pid(h) == pid]
+
+    @classmethod
+    def is_window_visible(cls, hwnd: int) -> bool:
+        """Returns True if the specified HWND is visible according to Win32."""
+        if sys.platform != "win32" or w32.user32 is None or not hwnd:
+            return False
+        try:
+            return bool(w32.user32.IsWindowVisible(w32.wintypes.HWND(hwnd)))
+        except Exception:
+            return False
+
+
+# Backward-compatible and semantic alias
+NativeSupervisor = NativeOSSupervisor

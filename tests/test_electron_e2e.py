@@ -13,9 +13,12 @@ import time
 import unittest
 
 try:
-    from .env_config import CORE_SKILL_DIR
+    from tests.env_config import CORE_SKILL_DIR
 except ImportError:
-    from env_config import CORE_SKILL_DIR
+    try:
+        from .env_config import CORE_SKILL_DIR
+    except ImportError:
+        from env_config import CORE_SKILL_DIR
 
 from adapters import get_adapter
 from core.cleanup import ProcessCleanup
@@ -41,6 +44,7 @@ class TestElectronRealRuntimeE2E(unittest.TestCase):
         if self.proc:
             ProcessCleanup.terminate_process_tree(self.proc.pid)
             try:
+                self.proc.kill()
                 self.proc.wait(timeout=2)
             except Exception:
                 pass
@@ -50,12 +54,14 @@ class TestElectronRealRuntimeE2E(unittest.TestCase):
     def test_electron_full_lifecycle(self):
         adapter = get_adapter("electron")
         self.assertIsNotNone(adapter)
+        assert adapter is not None
         self.assertEqual(adapter.engine_name, "electron")
 
+        flags = [f"--remote-debugging-port={self.port}", "--remote-allow-origins=*"]
         if sys.platform == "win32" and self.npx_cmd.lower().endswith((".cmd", ".bat")):
-            cmd = ["cmd.exe", "/c", self.npx_cmd, "electron", os.path.join(self.fixture_dir, "main.js"), f"--remote-debugging-port={self.port}"]
+            cmd = ["cmd.exe", "/c", self.npx_cmd, "electron"] + flags + [os.path.join(self.fixture_dir, "main.js")]
         else:
-            cmd = [self.npx_cmd, "electron", os.path.join(self.fixture_dir, "main.js"), f"--remote-debugging-port={self.port}"]
+            cmd = [self.npx_cmd, "electron"] + flags + [os.path.join(self.fixture_dir, "main.js")]
 
         self.proc = subprocess.Popen(
             cmd,
@@ -74,6 +80,7 @@ class TestElectronRealRuntimeE2E(unittest.TestCase):
             criteria = TargetCriteria(target_type="page")
             selected = adapter.select_target(targets, criteria)
             self.assertIsNotNone(selected)
+            assert selected is not None
             self.assertTrue(selected.is_application)
             self.assertIsNotNone(selected.websocket_endpoint)
 

@@ -51,6 +51,7 @@ from runtime.coordinate_transform import (
 )
 from runtime.native_supervisor import (
     NativeOSSupervisor,
+    NativeSupervisor,
     WindowForensicReport,
     OcclusionState,
     CoveringWindowInfo,
@@ -120,6 +121,61 @@ from runtime.webview_core import (
     WebviewGeometry,
     WebviewAutomationCore,
 )
+from runtime.observation_models import (
+    ObservationEpoch,
+    GeometryObservation,
+    VisibilityObservation,
+    InteractionObservation,
+    Observation,
+    NativeElementObservation,
+    WebElementObservation,
+    FrameObservation,
+    NativeObservation,
+    WebObservation,
+    ReconciliationObservation,
+    DualPerspectiveSnapshot,
+    RelationshipType,
+    RoleSource,
+    Certainty,
+)
+from runtime.semantic_normalization import (
+    normalize_web_role,
+    is_actionable_role,
+    CANONICAL_ROLES,
+    ACTIONABLE_ROLES,
+)
+from runtime.flaui_bridge import (
+    UIAElementDTO,
+    FlaUIBridge,
+)
+from runtime.native_observation import NativeObservationExtractor
+from runtime.web_observation import WebObservationExtractor
+from runtime.reconciliation import ContextReconciler
+from runtime.observation_compaction import format_observation_yaml
+from runtime.observation_pagination import ObservationPaginator
+from runtime.observation_diff import (
+    DiffItem,
+    ObservationDiffResult,
+    ObservationDiffer,
+)
+from runtime.observation_engine import ObservationEngine
+from runtime.locators import (
+    LocatorQuery,
+    LocatorMatch,
+    DeterministicLocatorEngine,
+)
+from runtime.actionability import (
+    GateStatus,
+    MotionStatus,
+    OverallActionabilityStatus,
+    GateReport,
+    ActionabilityResult,
+    ActionabilityEngine,
+)
+from runtime.observation_security import (
+    sanitize_observed_text,
+    create_safe_ui_envelope,
+)
 
 __all__ = [
     # State & Enums
@@ -183,6 +239,7 @@ __all__ = [
     "MultiMonitorTopology",
     # Native
     "NativeOSSupervisor",
+    "NativeSupervisor",
     "WindowForensicReport",
     "OcclusionState",
     "CoveringWindowInfo",
@@ -226,6 +283,55 @@ __all__ = [
     "AccessibilityRuntime",
     "WebviewGeometry",
     "WebviewAutomationCore",
+    # Observation Models (Phase 4)
+    "ObservationEpoch",
+    "GeometryObservation",
+    "VisibilityObservation",
+    "InteractionObservation",
+    "Observation",
+    "NativeElementObservation",
+    "WebElementObservation",
+    "FrameObservation",
+    "NativeObservation",
+    "WebObservation",
+    "ReconciliationObservation",
+    "DualPerspectiveSnapshot",
+    "RelationshipType",
+    "RoleSource",
+    "Certainty",
+    # Semantic Normalization (Phase 4)
+    "normalize_web_role",
+    "is_actionable_role",
+    "CANONICAL_ROLES",
+    "ACTIONABLE_ROLES",
+    # FlaUI Bridge & Native Observation (Phase 4)
+    "UIAElementDTO",
+    "FlaUIBridge",
+    "NativeObservationExtractor",
+    # Web Observation & Reconciliation (Phase 4)
+    "WebObservationExtractor",
+    "ContextReconciler",
+    # Compaction, Pagination, Diff, Engine (Phase 4)
+    "format_observation_yaml",
+    "ObservationPaginator",
+    "DiffItem",
+    "ObservationDiffResult",
+    "ObservationDiffer",
+    "ObservationEngine",
+    # Locators (Phase 4)
+    "LocatorQuery",
+    "LocatorMatch",
+    "DeterministicLocatorEngine",
+    # Actionability Engine (Phase 4)
+    "GateStatus",
+    "MotionStatus",
+    "OverallActionabilityStatus",
+    "GateReport",
+    "ActionabilityResult",
+    "ActionabilityEngine",
+    # Security (Phase 4)
+    "sanitize_observed_text",
+    "create_safe_ui_envelope",
     # Session & Daemon
     "SessionManager",
     "SessionConfig",
