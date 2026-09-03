@@ -93,6 +93,33 @@ from runtime.logging_events import (
     EventAuditor,
     UntrustedUIText,
 )
+from runtime.cdp_transport import (
+    ICDPTransport,
+    WebSocketCDPTransport,
+    MockCDPTransport,
+)
+from runtime.cdp_target import (
+    CDPTargetInfo,
+    EndpointProcessCorrelation,
+    CDPTargetManager,
+)
+from runtime.frame_manager import (
+    FrameContext,
+    FrameManager,
+)
+from runtime.utility_world import (
+    UtilityWorldManager,
+    UTILITY_WORLD_NAME,
+)
+from runtime.ax_runtime import (
+    AXNodeInfo,
+    AXSnapshot,
+    AccessibilityRuntime,
+)
+from runtime.webview_core import (
+    WebviewGeometry,
+    WebviewAutomationCore,
+)
 
 __all__ = [
     # State & Enums
@@ -102,6 +129,10 @@ __all__ = [
     "Verdict",
     "HealthState",
     "DaemonLifecycleState",
+    "TargetLifecycleState",
+    "FrameLifecycleState",
+    "AXFreshnessStatus",
+    "CDPConnectionStatus",
     # Errors
     "DesktopAutomationException",
     "SessionNotFoundException",
@@ -123,6 +154,17 @@ __all__ = [
     "WindowCloakedException",
     "NativeModalBlockedException",
     "InvalidStateTransitionError",
+    "CDPConnectionException",
+    "CDPProtocolException",
+    "CDPTimeoutException",
+    "CDPTargetClosedException",
+    "CDPTargetCrashedException",
+    "CDPNavigationRaceException",
+    "ExecutionContextDestroyedException",
+    "FrameDetachedException",
+    "FrameNotFoundException",
+    "AXFreezeDetectedException",
+    "CrossDomainFrameAccessException",
     # References
     "Rect",
     "ElementRef",
@@ -163,11 +205,27 @@ __all__ = [
     "WebviewRuntimeIdentity",
     "DebuggingEndpointIdentity",
     "NativeAutomationContext",
-    # Transport
+    # Sidecar Transport
     "ITransport",
     "NamedPipeTransport",
     "MockTransport",
     "PROTOCOL_VERSION",
+    # CDP Transport & Target Management (Phase 3)
+    "ICDPTransport",
+    "WebSocketCDPTransport",
+    "MockCDPTransport",
+    "CDPTargetInfo",
+    "EndpointProcessCorrelation",
+    "CDPTargetManager",
+    "FrameContext",
+    "FrameManager",
+    "UtilityWorldManager",
+    "UTILITY_WORLD_NAME",
+    "AXNodeInfo",
+    "AXSnapshot",
+    "AccessibilityRuntime",
+    "WebviewGeometry",
+    "WebviewAutomationCore",
     # Session & Daemon
     "SessionManager",
     "SessionConfig",
@@ -178,3 +236,4 @@ __all__ = [
     "EventAuditor",
     "UntrustedUIText",
 ]
+

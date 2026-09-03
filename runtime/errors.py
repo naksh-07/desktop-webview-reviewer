@@ -305,3 +305,166 @@ class InvalidStateTransitionError(DesktopAutomationException):
         self.current_state = current_state
         self.target_state = target_state
         self.allowed = allowed
+
+
+class CDPConnectionException(DesktopAutomationException):
+    """Failure establishing, maintaining, or recovering a CDP WebSocket connection."""
+
+    def __init__(self, message: str, endpoint: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            code="CDP_CONNECTION_ERROR",
+            recoverable=True,
+            agent_action_hint="Check if the remote debugging port is open, responsive, and owned by target PID.",
+            details={"endpoint": endpoint, **(details or {})},
+        )
+        self.endpoint = endpoint
+
+
+class CDPProtocolException(DesktopAutomationException):
+    """Chrome DevTools Protocol error returned from browser/webview."""
+
+    def __init__(self, error_code: int, message: str, method: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=f"CDP Error ({error_code}) in '{method or 'unknown'}': {message}",
+            code="CDP_PROTOCOL_ERROR",
+            recoverable=False,
+            agent_action_hint="Inspect CDP method arguments or verify domain support.",
+            details={"error_code": error_code, "method": method, **(details or {})},
+        )
+        self.error_code = error_code
+        self.method = method
+
+
+class CDPTimeoutException(DesktopAutomationException):
+    """Timed out waiting for response to a CDP command."""
+
+    def __init__(self, method: str, req_id: int, timeout_sec: float):
+        super().__init__(
+            message=f"Timed out waiting for response to CDP command '{method}' (id={req_id}) after {timeout_sec}s.",
+            code="CDP_TIMEOUT",
+            recoverable=True,
+            agent_action_hint="Increase command timeout or verify if target UI thread is blocked.",
+            details={"method": method, "req_id": req_id, "timeout_sec": timeout_sec},
+        )
+        self.method = method
+        self.req_id = req_id
+        self.timeout_sec = timeout_sec
+
+
+class CDPTargetClosedException(DesktopAutomationException):
+    """Target was closed or destroyed while an operation was in flight."""
+
+    def __init__(self, target_id: str, reason: str = "Target was closed/destroyed"):
+        super().__init__(
+            message=f"CDP Target '{target_id}' closed: {reason}",
+            code="CDP_TARGET_CLOSED",
+            recoverable=False,
+            agent_action_hint="Target webview surface was closed. Re-discover active targets.",
+            details={"target_id": target_id, "reason": reason},
+        )
+        self.target_id = target_id
+
+
+class CDPTargetCrashedException(DesktopAutomationException):
+    """Renderer process crashed for the active CDP target."""
+
+    def __init__(self, target_id: str, error_code: Optional[int] = None):
+        super().__init__(
+            message=f"CDP Target '{target_id}' renderer process crashed (code: {error_code}).",
+            code="CDP_TARGET_CRASHED",
+            recoverable=False,
+            agent_action_hint="Webview renderer process crashed. Collect crash dump and relaunch.",
+            details={"target_id": target_id, "error_code": error_code},
+        )
+        self.target_id = target_id
+        self.error_code = error_code
+
+
+class CDPNavigationRaceException(DesktopAutomationException):
+    """Navigation replaced the document context while an operation was resolving."""
+
+    def __init__(self, old_loader_id: str, new_loader_id: Optional[str] = None):
+        super().__init__(
+            message=f"Navigation race: document replaced (old loader: {old_loader_id}, new: {new_loader_id}).",
+            code="CDP_NAVIGATION_RACE",
+            recoverable=True,
+            agent_action_hint="Target page navigated. Re-query elements in the new observation epoch.",
+            details={"old_loader_id": old_loader_id, "new_loader_id": new_loader_id},
+        )
+        self.old_loader_id = old_loader_id
+        self.new_loader_id = new_loader_id
+
+
+class ExecutionContextDestroyedException(DesktopAutomationException):
+    """JavaScript execution context was destroyed (e.g. frame navigation or reload)."""
+
+    def __init__(self, context_id: int, reason: str = "Execution context destroyed"):
+        super().__init__(
+            message=f"Execution context {context_id} destroyed: {reason}",
+            code="EXECUTION_CONTEXT_DESTROYED",
+            recoverable=True,
+            agent_action_hint="Re-create or re-acquire execution context in the active frame.",
+            details={"context_id": context_id, "reason": reason},
+        )
+        self.context_id = context_id
+
+
+class FrameDetachedException(DesktopAutomationException):
+    """Frame was detached from the DOM while an operation was in flight."""
+
+    def __init__(self, frame_id: str):
+        super().__init__(
+            message=f"Frame '{frame_id}' has been detached from document.",
+            code="FRAME_DETACHED",
+            recoverable=False,
+            agent_action_hint="Frame no longer exists in DOM. Refresh frame hierarchy.",
+            details={"frame_id": frame_id},
+        )
+        self.frame_id = frame_id
+
+
+class FrameNotFoundException(DesktopAutomationException):
+    """Requested frame ID does not exist in the frame tree."""
+
+    def __init__(self, frame_id: str):
+        super().__init__(
+            message=f"Frame '{frame_id}' not found in active frame hierarchy.",
+            code="FRAME_NOT_FOUND",
+            recoverable=False,
+            agent_action_hint="Enumerate reachable frames via frame manager.",
+            details={"frame_id": frame_id},
+        )
+        self.frame_id = frame_id
+
+
+class AXFreezeDetectedException(DesktopAutomationException):
+    """Chromium accessibility tree diagnosed as frozen or un-materialized."""
+
+    def __init__(self, ax_count: int, dom_count: int, ratio: float):
+        super().__init__(
+            message=f"Lazy accessibility tree freeze detected: AX={ax_count}, DOM={dom_count}, ratio={ratio:.3f}",
+            code="AX_FREEZE_DETECTED",
+            recoverable=True,
+            agent_action_hint="Execute accessibility disable/enable reset cycle or fall back to utility realm DOM.",
+            details={"ax_count": ax_count, "dom_count": dom_count, "ratio": ratio},
+        )
+        self.ax_count = ax_count
+        self.dom_count = dom_count
+        self.ratio = ratio
+
+
+class CrossDomainFrameAccessException(DesktopAutomationException):
+    """Direct DOM access to cross-origin or out-of-process iframe is restricted by browser security."""
+
+    def __init__(self, frame_id: str, security_origin: str):
+        super().__init__(
+            message=f"Cross-domain access restricted for frame '{frame_id}' (origin: {security_origin}).",
+            code="CROSS_DOMAIN_FRAME_RESTRICTED",
+            recoverable=True,
+            agent_action_hint="Attach to target session directly (OOPIF) or interact via native coordinates.",
+            details={"frame_id": frame_id, "security_origin": security_origin},
+        )
+        self.frame_id = frame_id
+        self.security_origin = security_origin
+

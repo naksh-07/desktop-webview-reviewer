@@ -74,6 +74,9 @@ class SessionState:
     diagnostic_state: Dict[str, Any] = field(default_factory=dict)
     cleanup_state: Dict[str, Any] = field(default_factory=dict)
 
+    # Webview Automation Core
+    webview_core: Optional[Any] = None
+
     def __post_init__(self):
         self.reference_registry = ReferenceRegistry(session_id=self.session_id)
 
@@ -211,6 +214,13 @@ class SessionManager:
             if session.lifecycle_state.can_transition_to(SessionLifecycleState.DISCONNECTING):
                 session.transition_lifecycle(SessionLifecycleState.DISCONNECTING)
                 session.connection_state = ConnectionState.DISCONNECTED
+
+            # Cleanly disconnect webview automation core if present
+            if session.webview_core:
+                try:
+                    await session.webview_core.disconnect()
+                except Exception as e:
+                    logger.warning(f"Error disconnecting webview_core for session {session_id}: {e}")
 
             session.transition_lifecycle(SessionLifecycleState.CLOSED)
             session.connection_state = ConnectionState.DISCONNECTED

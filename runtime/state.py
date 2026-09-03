@@ -106,3 +106,38 @@ class DaemonLifecycleState(str, Enum):
     RUNNING = "RUNNING"
     SHUTTING_DOWN = "SHUTTING_DOWN"
     STOPPED = "STOPPED"
+
+
+class TargetLifecycleState(str, Enum):
+    """Lifecycle states of an inspectable CDP target."""
+    CREATED = "CREATED"
+    ATTACHED = "ATTACHED"
+    DETACHED = "DETACHED"
+    NAVIGATED = "NAVIGATED"
+    CRASHED = "CRASHED"
+    CLOSED = "CLOSED"
+
+
+class FrameLifecycleState(str, Enum):
+    """Lifecycle states of a document frame within a webview target."""
+    ATTACHED = "ATTACHED"
+    NAVIGATED = "NAVIGATED"
+    DETACHED = "DETACHED"
+
+
+class AXFreshnessStatus(str, Enum):
+    """Authoritative freshness status of the Chromium accessibility tree."""
+    FRESH = "FRESH"
+    SUSPECTED_STALE = "SUSPECTED_STALE"
+    UNKNOWN = "UNKNOWN"
+
+
+class CDPConnectionStatus(str, Enum):
+    """Status of a Chrome DevTools Protocol WebSocket transport connection."""
+    DISCONNECTED = "DISCONNECTED"
+    CONNECTING = "CONNECTING"
+    CONNECTED = "CONNECTED"
+    RECONNECTING = "RECONNECTING"
+    DEGRADED = "DEGRADED"
+    CLOSED = "CLOSED"
+

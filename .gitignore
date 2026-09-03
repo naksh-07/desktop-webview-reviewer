@@ -8,6 +8,7 @@ qt_ws_url.txt
 # Generated test evidence & media
 *_evidence.json
 evidence.json
+*benchmarks.json
 *.png
 *.jpg
 
