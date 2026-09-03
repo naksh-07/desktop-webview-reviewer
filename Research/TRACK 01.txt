@@ -1,0 +1,335 @@
+The reconnaissance for **TRACK 01: Existing Projects Hunt** has been completed. The comprehensive research report has been compiled and exported to Google Drive: **[01_EXISTING_PROJECTS.md](https://docs.google.com/document/d/1duMY_6p_IJvYs5UfbqA5Eaoc3VZyehrprWgsgo28gGM/edit?usp=drivesdk&ouid=100150596005450321153)**.
+
+Below is the complete, source-verified synthesis of the desktop automation and Model Context Protocol (MCP) ecosystem.
+
+---
+
+# 01 Existing Projects Hunt: Universal Desktop Automation & Desktop MCP Ecosystem Reconnaissance
+
+## Executive Summary
+
+Has anyone already built a genuinely universal system for inspecting, controlling, testing, debugging, and forensically auditing desktop applications across native UI, embedded webviews, browsers, and OS-level interfaces?
+
+**The short answer is no.** The desktop automation ecosystem is fractured into four isolated, incompatible architectural silos:
+
+1. **Traditional Native Automation (UIA / Win32)**: Frameworks like [FlaUI](https://github.com/FlaUI/FlaUI.WebDriver), [pywinauto](https://pywinauto.readthedocs.io/en/latest/getting_started.html), and [Appium Windows Driver](https://github.com/appium/appium-windows-driver) excel at native Win32, WinForms, and WPF automation via Windows COM UI Automation (UIA3). However, they treat embedded webviews (Electron, WebView2, CEF) as coarse accessibility nodes (`RootWebArea`), causing UI freezes, memory spikes, and incomplete DOM introspection.
+2. **Web / Electron Debug Bridges (CDP)**: Tools like [amafjarkasi/electron-mcp-server](https://github.com/amafjarkasi/electron-mcp-server), [laststance/electron-mcp-server](https://github.com/laststance/electron-mcp-server), and Playwright connect over WebSockets via the Chrome DevTools Protocol (CDP). They offer high-fidelity DOM inspection and Node.js main-process evaluation, but are completely blind to native desktop window chrome, OS file dialogs, system menus, and hybrid parent shells.
+3. **Emerging Desktop MCP Servers**: First-generation Model Context Protocol servers vary drastically in maturity. Popular coordinate-based tools like [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) suffer from severe token bloat and fatal COM threading crashes (`E_UNEXPECTED`). In contrast, disciplined implementations like [sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows) prove that **incremental UI diff snapshots** cut token overhead by **84% to 96%**, while [shanselman/FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP) demonstrates session-cached, Playwright-style opaque references (`ref=w1e47`).
+4. **AI GUI / Computer-Use Systems**: Autonomous agent frameworks like [microsoft/UFO](https://github.com/microsoft/UFO), [simular-ai/Agent-S](https://github.com/simular-ai/Agent-S), [bytedance/UI-TARS](https://github.com/bytedance/UI-TARS), and [Anthropic Computer Use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool) tackle open-ended OS tasks using Set-of-Marks visual prompting, [microsoft/OmniParser](https://github.com/microsoft/OmniParser) vision pipelines, or native Vision-Language-Action (VLA) models. While resilient to custom styling, they suffer from fractional DPI coordinate drift, high latency (1.5s–6.0s/step), and the **outcome-evidence gap**—failing to verify whether an input actually triggered the intended underlying system mutation.
+
+### Forensic De-Anonymization of Initial Leads
+
+* **`WindowsOSMCP`**: Not an open-source project or repository. It is an informal community term that emerged in mid-2025 developer discussions regarding Microsoft Build announcements about native Windows OS Copilot tool integrations.
+* **`FEOM`**: An unverified acronym. Forensic code and literature searches across public repositories confirm that `"FEOM"` in software engineering is almost exclusively an **OCR scanning artifact or typographical misspelling of `"from"**` (e.g., `SELECT name FEOM sys.tables;`), or unrelated academic chemistry modeling papers. It does not exist as an automation framework.
+
+---
+
+## Candidate Discovery & Classification
+
+| Project / Entity | Classification | Core Focus & Runtime |
+| --- | --- | --- |
+| **[sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)** | **Tier A: Serious / Highly Relevant** | C# .NET 10 native UIA3 MCP server & CLI with incremental diff snapshots (85–96% token savings) |
+| **[visioncortex/ui-automata](https://github.com/visioncortex/ui-automata)** | **Tier A: Serious / Highly Relevant** | Rust desktop workflow engine featuring an in-memory Shadow DOM tree and HWND locking |
+| **[microsoft/AutoGenesis](https://github.com/microsoft/AutoGenesis)** | **Tier A: Serious / Highly Relevant** | Microsoft Edge QA team's AI test framework integrating `pywinauto` UIA with MCP |
+| **[glaciousm/winjavadriver](https://github.com/glaciousm/winjavadriver)** | **Tier A: Serious / Highly Relevant** | Native C++ W3C WebDriver server + token-efficient MCP smart tools and legacy Win32/VB6 fallbacks |
+| **[microsoft/UFO](https://github.com/microsoft/UFO)** | **Tier A: Serious / Highly Relevant** | Microsoft Research's UI-focused dual-agent architecture (HostAgent + AppAgent) with Set-of-Marks |
+| **[shanselman/FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP)** | **Tier B: Serious / Partially Relevant** | C# FlaUI server with Playwright-style opaque element references (`ref=w1e47`) and atomic batching |
+| **[epnielsen/Winapp-MCP](https://github.com/epnielsen/Winapp-MCP)** | **Tier B: Serious / Partially Relevant** | C# FlaUI UIA3 server with ranked candidate ambiguity scoring and subtree scoping (`rootAutomationId`) |
+| **[CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP)** | **Tier B: Serious / Partially Relevant** | High-adoption Python desktop automation MCP (DXGI screen capture + flat UIA list) |
+| **[amafjarkasi/electron-mcp-server](https://github.com/amafjarkasi/electron-mcp-server)** | **Tier B: Serious / Partially Relevant** | Direct CDP WebSocket inspection for Electron with dynamic port discovery and Node main process eval |
+| **[laststance/electron-mcp-server](https://github.com/laststance/electron-mcp-server)** | **Tier B: Serious / Partially Relevant** | Playwright-backed Electron automation server with 4-level runtime sandboxing and React debounce guards |
+| **[simular-ai/Agent-S](https://github.com/simular-ai/Agent-S)** | **Tier B: Serious / Partially Relevant** | OpenACI hybrid accessibility/visual framework with a CLI-first execution bias |
+| **[microsoft/OmniParser](https://github.com/microsoft/OmniParser)** | **Tier B: Serious / Partially Relevant** | Two-stage visual screen parser (YOLOv8/11 + Florence-2 icon semantics + PaddleOCR) |
+| **[bytedance/UI-TARS](https://github.com/bytedance/UI-TARS)** | **Tier B: Serious / Partially Relevant** | End-to-end Vision-Language-Action GUI model operating natively on raw visual tokens |
+| **[FlaUI/FlaUI](https://github.com/FlaUI/FlaUI)** | **Tier B: Serious / Foundational** | Foundational unmanaged COM UIA3 automation library for .NET |
+| **[pywinauto/pywinauto](https://pywinauto.readthedocs.io/en/latest/getting_started.html)** | **Tier B: Serious / Foundational** | Foundational Python Win32 / UIA automation library |
+| **[appium/appium-windows-driver](https://github.com/appium/appium-windows-driver)** | **Tier B: Serious / Foundational** | W3C WebDriver wrapper over Microsoft WinAppDriver and community FlaUI |
+| **[mario-andreschak/mcp-windows-desktop-automation](https://github.com/mario-andreschak/mcp-windows-desktop-automation)** | **Tier C: Interesting Prototype** | AutoItX3 C-FFI wrapper in Node.js via Koffi for fast Win32 HWND/pixel control |
+| **[BrijesharunG/winapp-mcp](https://marketplace.visualstudio.com/items?itemName=BrijesharunG.winapp-mcp)** | **Tier C: Interesting Prototype** | VS Code extension Playwright-style Windows desktop wrapper |
+
+---
+
+## Detailed Profiles of Key Serious Projects
+
+### 1. [sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)
+
+* **Author / Tech**: Stefan Broenner (Microsoft). C# (.NET 10), native COM `UIAutomationClient` (`IUIAutomation5/6`), official Microsoft MCP SDK.
+* **Architecture**: Features dual entry points sharing a single core engine: an MCP JSON-RPC server and a command-line tool (`wincli`). A contract test suite verifies that CLI output and MCP responses are byte-for-byte identical. The engine runs on a dedicated Single-Threaded Apartment (STA) thread, preventing worker thread deadlocks.
+* **Observation & Snapshot Innovation**:
+* Implements **incremental UI diff snapshots** (`mode=auto|full|reset`). Caches the prior UI state and returns `kind=diff` containing only added, removed, or mutated nodes when changes affect less than 80% of the tree.
+* **Empirical Token Savings**: Benchmarked on [mcp-windows Issue #203](https://www.google.com/search?q=https://github.com/sbroenne/mcp-windows/issues/203) at **95.7% token reduction** in Electron 44 (13.7k down to 592 tokens), **85.7% reduction** in Microsoft Word, and **90.8% reduction** in Microsoft Excel.
+* Applies semantic pruning to Chromium `RootWebArea` accessibility trees, stripping non-interactive layout containers, blank images, and duplicate labels.
+
+
+* **Action & Waiting Model**:
+* Interacts primarily via UIA control patterns (`InvokePattern`, `ValuePattern`), falling back to `SendInput` using `MOUSEEVENTF_MOVE_NOCOALESCE` for non-coalesced mouse trajectories.
+* Tested `UIA StructureChangedEvent` against bounded polling ([mcp-windows Issue #189](https://www.google.com/search?q=https://github.com/sbroenne/mcp-windows/issues/189)). Polling median latency (421.8ms) virtually matched event latency (414.9ms), while event subscriptions caused event storms in Chromium. Event-driven waiting was rejected in favor of deterministic polling with backoff.
+
+
+* **Failure Modes**: Chromium runtime IDs churn across DOM redraws (solved via structural locator re-resolution); synchronous modal dialogs deadlock standard window messages (solved via asynchronous `PostMessage`).
+
+### 2. [visioncortex/ui-automata](https://github.com/visioncortex/ui-automata)
+
+* **Author / Tech**: Chris Tsang (Vision Cortex). Rust (`windows-rs`, `uiautomation-rs`, `rmcp`), Tokio runtime.
+* **Architecture**: Builds a client-side **Shadow DOM**: a persistent in-memory graph of the accessibility tree. Locks the target root `HWND` to prevent focus hijacking and traverses the shadow tree to avoid repeated out-of-process COM RPCs. Includes self-healing traversal: when an element goes stale, the engine walks up to the nearest stable ancestor and queries downward.
+* **Defect Audit**:
+* **Closed-Source MCP Binary ([ui-automata Issue #2](https://www.google.com/search?q=https://github.com/visioncortex/ui-automata/issues/2))**: While underlying crates are open-source Rust, the actual MCP server `automata-agent.exe` is distributed as a closed pre-compiled binary.
+* **Windows 11 Threading Bugs ([ui-automata Issue #3](https://www.google.com/search?q=https://github.com/visioncortex/ui-automata/issues/3))**: Desktop inspection queries return empty arrays (`[]`) on Windows 11 Build 26200+ because Tokio worker threads call UIA without initializing the COM single-threaded apartment (`CoInitializeEx`).
+* **Smart App Control (SAC) Blocks ([ui-automata Issue #8](https://www.google.com/search?q=https://github.com/visioncortex/ui-automata/issues/8))**: Unsigned release binaries are blocked by Windows 11 Smart App Control under Code Integrity Events 3033/3077.
+
+
+
+### 3. [microsoft/AutoGenesis](https://github.com/microsoft/AutoGenesis)
+
+* **Author / Tech**: Microsoft Edge QA Team. Python 3.10+, `pywinauto` (UIA backend), Appium, FastMCP, Behave (BDD).
+* **Architecture**: A multi-platform automated testing system pairing BDD Gherkin feature files with MCP servers.
+* **Web & Desktop Bridging**: Automates Windows apps and PWAs via `pywinauto-mcp-server`. Does not connect via CDP; instead, it traverses Chromium's accessibility hierarchy (`RootWebArea` in `Chrome_WidgetWin_1`). Enforces strict defensive bounding in `element_util.py` (`max_root_depth = 10`, `limited_page_length = 15`, `SNAPSHOT_MAX_SIZE = 800000` bytes) to prevent memory crashes.
+* **Codebase Discrepancy**: While `playwright` is imported in `app_session.py`, code analysis reveals it is currently an uncalled stub; all actions execute through UIA.
+
+### 4. [glaciousm/winjavadriver](https://github.com/glaciousm/winjavadriver)
+
+* **Author / Tech**: Menelaos Mamouzellos. C++ native HTTP server (`winjavadriver.exe`), Java client (Selenium `RemoteWebDriver`), TypeScript MCP server.
+* **Architecture**: Clean-room implementation of the W3C WebDriver HTTP protocol for Windows desktop apps, serving as a modern open-source successor to Microsoft WinAppDriver.
+* **Innovations**:
+* **Dual Engine (UIA + Win32/MSAA)**: Falls back to native `WM_SETTEXT` / `WM_GETTEXT` on legacy Visual Basic 6 runtimes (`ThunderRT6*`) where UIA text patterns silently fail.
+* **Virtual MSFlexGrid Controller**: Directly navigates cells in legacy `MSFlexGrid` controls without relying on screen resolution or mouse hovering.
+* **Composite MCP Tools**: Bundles inspection, interaction, and waiting into high-level tools (`win_observe`, `win_interact`, `win_wait_for`), eliminating multi-turn agent token bloat.
+
+
+
+### 5. [microsoft/UFO](https://github.com/microsoft/UFO) (UFO³)
+
+* **Author / Tech**: Microsoft Research AI. Python 3.10+, `pywinauto` (UIA), OpenCV, pygetwindow, VLM backends.
+* **Architecture**: Multi-agent framework separating system control into a **HostAgent** (global OS manager handling process launches and window focus) and an **AppAgent** (application specialist driving controls inside the active window).
+* **Perception & Action**: Extracts actionable UIA controls, captures a screenshot, and renders a **Set-of-Marks (SoM)** overlay. Invocations execute primarily through UIA patterns (`InvokePattern`), with fallback to `pyautogui` / `SendInput`.
+* **Weaknesses**: High latency (2.5s–6.0s per step); prompts consume 4k–8k tokens per step; completely blinded by black-box canvas applications (Electron without accessibility flags, Qt, Flutter).
+
+### 6. C# FlaUI Servers: [shanselman/FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP) & [epnielsen/Winapp-MCP](https://github.com/epnielsen/Winapp-MCP)
+
+* **Playwright-Style Element References**: `shanselman/FlaUI-MCP` assigns concise opaque IDs (`ref=w1e43`) during snapshot generation, maintaining a session registry that maps references directly to live `AutomationElement` COM pointers. Actions call `windows_click(ref="w1e43")` with zero re-query latency. Includes background window capture via Win32 `PrintWindow(PW_RENDERFULLCONTENT)` and atomic batch pipelines (`windows_batch`).
+* **Ranked Ambiguity Resolution**: `epnielsen/Winapp-MCP` scores candidate elements when non-unique selectors match multiple controls, executing the top-scoring candidate while returning ambiguity diagnostics. Introduces subtree boundary scoping (`rootAutomationId`) and fault-tolerant tree walks.
+
+### 7. [CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP)
+
+* **Author / Tech**: Jeomon George. Python 3.10+, `comtypes`, `dxcam` (DirectX Desktop Duplication), `mss`, `pywin32`.
+* **Architecture**: Coordinate-centric agent interface (`Click-Tool(x, y)`, `Type-Tool`, `State-Tool`).
+* **Forensic Defect Audit**:
+* **Fatal UIA Event Watchdog Crashes ([Windows-MCP Issue #332](https://www.google.com/search?q=https://github.com/CursorTouch/Windows-MCP/issues/332))**: Subscribing to `IUIAutomationStructureChangedEventHandler` via Python `comtypes` triggered native access violations (`E_UNEXPECTED`) during rapid UI redraws, terminating the Python process without a stack trace. Maintainers were forced to remove structure-change synchronization and disable the watchdog by default.
+* **UTF-16 Emoji Crashes**: Raw surrogate pairs in window titles crashed Python's `json.dumps()` with `UnicodeEncodeError`, requiring custom regex sanitization.
+* **Asyncio Self-Pipe CPU Burn**: Workstation lock or RDP disconnect caused `asyncio` loopback socketpairs to enter an infinite spin loop reading EOF, pinning CPU at 100%.
+
+
+
+### 8. Electron MCP Servers: [amafjarkasi](https://github.com/amafjarkasi/electron-mcp-server) & [laststance](https://github.com/laststance/electron-mcp-server)
+
+* **amafjarkasi/electron-mcp-server**: Directly connects via WebSocket using `chrome-remote-interface`. Discovers `--remote-debugging-port` dynamically by querying the process command line via PowerShell (`Get-CimInstance Win32_Process`). Evaluates code directly inside Electron's Node.js main process context via `--inspect=0` (`evaluate_main`).
+* **laststance/electron-mcp-server**: Playwright-backed Electron automation server featuring ~40 discrete `electron_*` tools, 4-tier runtime sandboxing (`STRICT` to `DEVELOPMENT`), and React 18/19 synthetic event dispatching with 1-second debounce locks to prevent double-submit loops.
+
+---
+
+## Traditional Automation Foundations
+
+1. **[FlaUI/FlaUI](https://github.com/FlaUI/FlaUI)**: The gold standard for modern .NET Windows automation. Directly wraps unmanaged COM `UIAutomationCore.dll` (`FlaUI.UIA3`), supporting native cache requests (`IUIAutomationCacheRequest`) and pattern invocation. Its custom XPath engine over UIA is notoriously slow because unconstrained queries (`//`) trigger full-tree cross-process COM queries.
+2. **[pywinauto/pywinauto](https://pywinauto.readthedocs.io/en/latest/getting_started.html)**: The foundational Python library offering dual backends (`win32` messages vs. `uia` COM). Its lazy `WindowSpecification` resolution relies on the fuzzy `best_match` algorithm (Levenshtein distance), which creates maintenance hazards by silently binding to incorrect controls when UI labels change.
+3. **[microsoft/WinAppDriver](https://github.com/microsoft/WinAppDriver/issues/1103)**: Abandoned by Microsoft around 2020–2022. The repository provided only closed-source C++ binary installers plagued by broken XPath 2.0 memory leaks, multi-monitor DPI scaling bugs, and zero support for unpackaged WinUI 3 apps. The community migrated to [FlaUI.WebDriver](https://github.com/FlaUI/FlaUI.WebDriver) and `appium-flaui-driver`.
+4. **[TestStack/White](https://github.com/TestStack/White)**: Historically the dominant .NET UI framework. Abandoned in 2017 due to unresolvable memory leaks in managed UIA2 event handlers and apartment-threading deadlocks. Maintainers officially deprecated the project and endorsed **FlaUI**.
+
+---
+
+## AI Agent & Computer-Use Foundations
+
+1. **[simular-ai/Agent-S](https://github.com/simular-ai/Agent-S)**: Hierarchical agent framework built on OpenACI. Demonstrates a **CLI-first bias**: whenever a task can be achieved via terminal commands (file operations, system settings), Agent-S completely bypasses the UI, avoiding fragile mouse clicking. Achieved a top-tier **56.0% success rate on [OSWorld-Verified**](https://xlang.ai/blog/osworld-verified) when paired with OpenAI o3.
+2. **[microsoft/OmniParser](https://github.com/microsoft/OmniParser)**: Two-stage pure vision screen parser. Stage 1 detects interactable regions via fine-tuned YOLOv8/11; Stage 2 captions icons into functional semantics via Microsoft Florence-2 (e.g., "settings gear icon") and extracts text via PaddleOCR. Completely platform-agnostic, but introduces 1.2s–3.5s latency per frame on high-end GPUs and cannot inspect hidden logical states (disabled/read-only controls).
+3. **[bytedance/UI-TARS](https://github.com/bytedance/UI-TARS)**: End-to-end Vision-Language-Action (VLA) model based on fine-tuned Qwen2-VL. Operates directly on raw screenshots, predicting thoughts and normalized `(0-1000)` click/drag coordinates in a single forward pass. Minimizes perception latency (0.8s–2.0s), but suffers from spatial quantization errors on 4K displays (~3.8px error margin) and dynamic patch token explosion.
+4. **[xlang-ai/OSWorld Benchmark](https://github.com/xlang-ai/OSWorld)**: 369 real-world tasks across Ubuntu desktop apps. Human expert baseline: **72.36%**. Claude 3.5 Sonnet Computer Use: **14.9% – 22.0%**. UI-TARS 72B: **~40.0%**. Claude 4 Sonnet: **43.9%**. Agent S2 (o3): **56.0%**.
+
+---
+
+## Cross-Technology Compatibility Matrix
+
+| UI Technology | Native Accessibility Mechanism | Recommended Engine | Primary Failure Mode & Quirk |
+| --- | --- | --- | --- |
+| **Win32 / Common Controls** | Standard `HWND`s, Win32 messages, default UIA proxies | `pywinauto` (win32) or `FlaUI.UIA3` | Extremely stable. Limited to standard controls (buttons, edits, listviews). |
+| **WinForms (.NET)** | Controls own individual `HWND`s; exposes `ControlAccessibleObject` | `FlaUI.UIA3` / `pywinauto` (uia) | Third-party control suites (DevExpress, Infragistics) often override accessibility incorrectly. |
+| **WPF (.NET)** | Single root `HWND`; internal tree composed via DirectX; `AutomationPeer`s | `FlaUI.UIA3` | Virtualized controls (`DataGrid`, `ListView`) do not instantiate `AutomationPeer`s until scrolled into view. |
+| **WinUI 3 / XAML Islands** | DirectX rendering inside XAML Islands / CoreWindow; modern UIA3 peers | `FlaUI.UIA3` | WinAppDriver fails completely; requires native UIA3 COM interfaces. |
+| **Qt5 / Qt6** | `QAccessibleInterface` plugin (`qtaccessiblewidgets.dll`) | `FlaUI.UIA3` / `pywinauto` (uia) | Disabled by default in many commercial builds. Must set `QT_ACCESSIBILITY=1`. |
+| **Java AWT / Swing** | Java Access Bridge (JAB) bridging JVM `AccessibleContext` to Windows IPC | Specialized JAB drivers or FlaUI | Must run `jabswitch -enable`. Severe 32-bit vs. 64-bit JVM/OS bitness mismatch crashes. |
+| **Electron / CEF (Chromium)** | Web DOM exposed through Chromium's Accessibility Engine | Playwright/CDP (preferred) or `FlaUI.UIA3` | **Accessibility tree is dormant by default**. Window appears blank to UIA until forced awake. |
+
+---
+
+## Ecosystem Comparison Matrix
+
+| Project | Seriousness | Platform | Native UI | UIA | WebView | CDP | Browser | Vision | MCP | CLI | Snapshot | Locator | Actions | Evidence | Recording | Security | Key Strength | Key Weakness |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **sbroenne/mcp-windows** | Tier A | Windows | Yes | UIA5/6 | Partial | No | No | Optional | Yes | Yes | Incremental Diff | Semantic IDs | UIA Pattern + Mouse | Useful | No | Process gating | 85-96% token savings via diffs | Blind to embedded CDP DOM |
+| **visioncortex/ui-automata** | Tier A | Windows | Yes | UIA3 | Partial | No | No | Yes | Yes | Yes | In-memory Shadow DOM | Name/Role/HWND | Pattern + SendInput | Basic | Yes | HWND lock | Shadow DOM & self-healing | Closed binary, Win11 SAC blocks |
+| **microsoft/AutoGenesis** | Tier A | Win/Mac/Mob | Yes | UIA3 | Partial | Stub | No | No | Yes | No | Bounded UIA Tree | Fuzzy Match | Pattern + Mouse | Useful | Yes | Standard | BDD Gherkin integration | Playwright import is dead stub |
+| **glaciousm/winjavadriver** | Tier A | Windows | Yes | UIA3 | Partial | No | No | No | Yes | No | Combined Observe | Positional Grid | Win32 Msg + UIA | Useful | No | Localhost | Legacy Win32/VB6/MSFlexGrid | Requires Java client for tests |
+| **microsoft/UFO** | Tier A | Windows | Yes | UIA3 | Partial | No | No | Yes | Partial | No | SoM + UIA Table | Control ID + Box | Pattern + SendInput | Strong | Yes | App focus | Dual Host/App agent hierarchy | 4k-8k tokens/step, high latency |
+| **shanselman/FlaUI-MCP** | Tier B | Windows | Yes | UIA3 | No | No | No | Yes | Yes | No | Opaque Ref Tree | `ref=w1e15` | Pattern + Mouse | Basic | No | Timeout wrap | Playwright-style opaque refs | No embedded webview support |
+| **epnielsen/Winapp-MCP** | Tier B | Windows | Yes | UIA3 | No | No | No | No | Yes | No | Compact Text Tree | Ranked Scoring | Pattern + Click | Useful | No | Subtree scope | Ranked candidate disambiguation | No webview or vision support |
+| **CursorTouch/Windows-MCP** | Tier B | Windows | Partial | UIA3 | Partial | No | No | Yes | Yes | No | Flat List + Image | Coordinates | Physical SendInput | Basic | No | Watchdog off | Fast DXGI screen capture | Fatal COM crashes, coordinate drift |
+| **amafjarkasi/electron-mcp** | Tier B | Cross-plat | No | No | Yes | Yes | Yes | Yes | Yes | No | CDP DOM Tree | CSS/XPath | CDP DOM Events | Strong | Yes | Path allowlist | Node main process evaluation | Blind to native desktop UI |
+| **laststance/electron-mcp** | Tier B | Cross-plat | No | No | Yes | Yes | Yes | Yes | Yes | No | Playwright Tree | CSS/Role | React Synthetic | Useful | No | 4-tier sandbox | React 18/19 debounce guards | Blind to native desktop UI |
+| **simular-ai/Agent-S** | Tier B | Lin/Win/Mac | Yes | UIA/AT | Partial | No | Yes | Yes | No | Yes | A11y Tree + Image | Semantic + Box | CLI First + Mouse | Useful | Yes | Command confirm | CLI-first execution bias | AT-SPI daemon hangs on Linux |
+| **bytedance/UI-TARS** | Tier B | Cross-plat | Partial | No | Partial | No | Yes | Yes | Partial | No | Raw Screenshot | Normalized Grid | Synthetic Mouse/Key | Basic | Yes | Unrestricted | Native VLA forward pass speed | 4K display quantization errors |
+| **microsoft/OmniParser** | Tier B | Cross-plat | Partial | No | Partial | No | Yes | Yes | No | No | Annotated Image | Discrete Bounding Box | None (Perception) | None | No | N/A | Icon semantics via Florence-2 | 1.2s-3.5s GPU perception latency |
+| **FlaUI Core** | Foundational | Windows | Yes | UIA2/3 | Partial | No | No | No | No | No | Live COM Tree | Conditions/XPath | Pattern + SendInput | None | No | UIPI checks | Native unmanaged COM wrapper | High maintenance, slow // XPath |
+| **pywinauto** | Foundational | Windows | Yes | UIA3 | Partial | No | No | No | No | No | WindowSpecification | `best_match` | Win32 Msg + SendInput | None | No | Win32 context | Pythonic DSL, dual backends | Fuzzy best_match binds wrongly |
+| **appium-windows-driver** | Foundational | Windows | Yes | UIA3 | Partial | No | No | No | No | No | XML Page Source | XPath/Accessibility | WebDriver Actions | Useful | No | HTTP binding | Standard W3C WebDriver spec | Microsoft WinAppDriver abandoned |
+| **mario-andreschak/mcp** | Tier C | Windows | Yes | No | No | No | No | Yes | Yes | No | Win32 Titles/Classes | Control ID/Title | Win32 ControlClick | Basic | No | Focus risks | Extremely fast via Koffi C-FFI | Zero support for non-HWND apps |
+
+---
+
+## Implementation Pattern Catalog
+
+### Pattern 1: Incremental UI Diff Snapshots
+
+* **Project**: `sbroenne/mcp-windows` ([Issue #203](https://www.google.com/search?q=https://github.com/sbroenne/mcp-windows/issues/203)).
+* **Implementation**: Caches the prior UI tree in memory. On subsequent requests, the server computes a structural diff and emits `kind=diff`, transmitting only mutated, added, or deleted nodes. Falls back to `kind=full` if changes exceed 80%.
+* **Problem Solved**: Full UIA accessibility trees consume 10,000 to 40,000 tokens per call, exhausting agent context windows within 3–5 workflow steps.
+* **Trade-Offs**: Requires stateful server-side memory; agent must track state across diff patches.
+* **Potential Usefulness**: **Essential for production MCP desktop automation.** Achieves **85% to 96% token reductions**.
+
+### Pattern 2: Opaque Session Element References (`ref=w1e47`)
+
+* **Project**: `shanselman/FlaUI-MCP`.
+* **Implementation**: Generates concise, opaque alphanumeric identifiers during tree serialization and maintains a session map of `ref -> AutomationElement`. Subsequent actions call `windows_click(ref="w1e47")`.
+* **Problem Solved**: Eliminates verbose, fragile XPath expressions and spatial coordinate hallucination.
+* **Trade-Offs**: References become invalid if the window undergoes a full redraw.
+* **Potential Usefulness**: Highly valuable for shrinking prompt schemas and accelerating agent tool calls.
+
+### Pattern 3: Dual-Driver Orchestration (UIA Native + CDP Web)
+
+* **Project**: Enterprise hybrid test architectures.
+* **Implementation**: Two coordinated automation drivers: Driver A (UIA3) drives native window frames, ribbons, and file dialogs; Driver B (Playwright/CDP) connects over WebSocket to the exposed `--remote-debugging-port` to automate embedded web views.
+* **Problem Solved**: Solves the fundamental incompatibility where UIA cannot inspect complex web DOMs/canvases and CDP cannot touch native OS dialogs.
+* **Trade-Offs**: Requires managing two concurrent sessions and synchronizing coordinate systems across display DPI boundaries.
+* **Potential Usefulness**: The only architecturally sound solution for hybrid applications.
+
+### Pattern 4: Ranked Candidate Scoring for UI Ambiguity
+
+* **Project**: `epnielsen/Winapp-MCP` (Commit `122e1ccf74`).
+* **Implementation**: When a selector matches multiple controls (e.g., duplicate "OK" buttons), the engine computes a candidate relevance score based on structural nesting, tree depth, and dialog roles. It executes the highest-scoring candidate while returning structured ambiguity diagnostics.
+* **Problem Solved**: Eliminates arbitrary button clicking in complex, repetitive enterprise forms.
+* **Trade-Offs**: Minor calculation overhead during search resolution.
+* **Potential Usefulness**: Highly recommended for complex multi-window software.
+
+### Pattern 5: Non-Coalesced Physical Mouse Dragging
+
+* **Project**: `sbroenne/mcp-windows` (Commit `9e01c38830`).
+* **Implementation**: Injects synthetic mouse movements via `SendInput` using `MOUSEEVENTF_MOVE_NOCOALESCE` with microsecond pauses.
+* **Problem Solved**: Standard OS input handling coalesces intermediate mouse packets, causing canvas drawing or drag-and-drop operations to collapse into straight lines or dropped payloads.
+* **Trade-Offs**: Slightly slower trajectory execution.
+* **Potential Usefulness**: Critical for graphics editors, CAD software, and slider manipulation.
+
+### Pattern 6: Dynamic Process Port Discovery
+
+* **Project**: `amafjarkasi/electron-mcp-server`.
+* **Implementation**: Queries the operating system process table (`Get-CimInstance Win32_Process`) using the application PID, parsing the command line string with regex to automatically extract `--remote-debugging-port=\d+`.
+* **Problem Solved**: Eliminates hardcoded WebSocket ports and handles dynamic port assignment.
+* **Trade-Offs**: Requires process table query permissions.
+* **Potential Usefulness**: Essential for zero-configuration attachment to WebView2 and Electron.
+
+---
+
+## Common Failure Modes & Technical Traps
+
+1. **COM Apartment Deadlocks (STA vs. MTA)**: Blocking calls on an STA thread while an incoming UIA event arrives freezes the COM marshaling window message queue.
+2. **Fatal Native Access Violations (`E_UNEXPECTED`)**: Subscribing to native UIA event handlers from high-level managed or interpreted languages (such as Python `comtypes`) crashes the process upon rapid UI redraws.
+3. **Catastrophic Descendant Traversal Latency**: Uncached `FindAll(TreeScope.Descendants)` queries across complex applications trigger thousands of out-of-process COM RPCs, freezing both test runner and target app.
+4. **Stale Element Pointers (`0x80040201`)**: Cached `IUIAutomationElement` pointers become invalid when declarative frameworks (WPF, React Native) garbage-collect and redraw UI nodes.
+5. **UIPI Integrity Level Drops**: Medium-integrity test runners cannot inject input into High-integrity (Admin) applications without `uiAccess="true"` and code signing.
+6. **RDP Session Disconnect Culling**: Minimizing or closing an RDP session detaches the virtual display driver, halting DirectX/GDI rendering and collapsing bounding boxes to zero.
+7. **Fractional DPI Coordinate Shifts**: 125%/150% scaling shifts physical pixels from logical UIA coordinates, causing synthetic clicks to hit empty space.
+
+---
+
+## Major Gaps in Existing Solutions
+
+1. **Unified Native-Web Boundary Crossing**: No existing system seamlessly transitions from a native desktop frame into an embedded WebView2/CEF pane in a single unified session without fragile manual port configuration.
+2. **Deterministic UI Settling Detection**: Existing systems alternate between arbitrary sleep delays, expensive polling, or unstable COM event subscriptions that crash process runtimes.
+3. **Cryptographic / Forensic State Verification**: Existing desktop agents suffer from the outcome-evidence gap, assuming that dispatching an input event equates to achieving the desired state change.
+4. **Resilience to Mixed Multi-Monitor DPI Environments**: Fractional display scaling across heterogeneous displays consistently desynchronizes visual bounding boxes, OCR crops, and physical synthetic clicks.
+
+---
+
+## What Existing Projects Already Solve
+
+* **High-Performance Native Windows Inspection**: `sbroenne/mcp-windows` and `FlaUI` have mastered unmanaged COM UIA3 inspection with dedicated STA thread isolation.
+* **Drastic Token Compression**: `sbroenne/mcp-windows` has proven that incremental UI diff snapshots achieve **85% to 96% token savings**.
+* **Deep Electron / Web Inspection**: `amafjarkasi/electron-mcp-server` and Playwright provide complete DOM, network, and main-process Node.js automation via CDP.
+* **Token-Efficient Agent Tools**: `glaciousm/winjavadriver` (`win_observe`, `win_interact`) and `shanselman/FlaUI-MCP` (`ref=w1e47`) demonstrate how to eliminate multi-turn round-trip latency.
+* **Visual Glyph Grounding**: `microsoft/OmniParser` effectively detects small graphical icons and infers functional semantics via fine-tuned vision models.
+
+---
+
+## What Nobody Solves Well
+
+* **Zero-Configuration Embedded WebView Piercing**: Automatically detecting, attaching to, and piercing embedded WebViews inside native application shells without requiring manual developer flags or external debug ports.
+* **Crash-Resistant Event-Driven Synchronization**: Providing lightweight, reliable UI change notification without incurring fatal COM memory access violations or event storm deadlocks.
+* **True Forensic Auditability**: Programmatically proving that a business workflow completed through tamper-evident state assertions across process memory, file systems, and network payloads.
+
+---
+
+## Final Verdict Section
+
+### A. Does a genuinely universal desktop automation system already exist?
+
+**No.** Current tools are strictly balkanized: they automate native Windows UIA well (FlaUI, mcp-windows), or Electron/CDP well (electron-mcp-server, Playwright), or visual surfaces heuristically (OmniParser, UI-TARS), but no system provides unified, cross-boundary automation across native UI, embedded webviews, and OS interfaces.
+
+### B. Does a genuinely universal desktop MCP already exist?
+
+**No.** Existing MCP implementations are either specialized native servers (`mcp-windows`, `FlaUI-MCP`), coordinate-centric screen clickers (`Windows-MCP`), or browser/Electron-only bridges (`electron-mcp-server`). None provide a unified native + webview MCP interface.
+
+### C. Which projects come closest?
+
+1. **[sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)**: The closest to an ideal native Windows MCP server, distinguished by incremental diff snapshots and rigorous engineering.
+2. **[microsoft/UFO](https://github.com/microsoft/UFO)**: The closest to an autonomous desktop agent, integrating hybrid UIA trees, Set-of-Marks visual prompting, and dual-agent orchestration.
+3. **[glaciousm/winjavadriver](https://github.com/glaciousm/winjavadriver)**: The closest to an industrial, standards-compliant automation engine bridging modern UIA with legacy Win32/MSAA controls.
+
+### D. Which projects have the strongest native automation architecture?
+
+**[sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)** and **[FlaUI](https://github.com/FlaUI/FlaUI)**. Both bypass fragile managed UIA2 layers, interfacing directly with native COM `IUIAutomation5/6` via dedicated STA apartments with batch caching.
+
+### E. Which projects have the strongest web automation architecture?
+
+**[amafjarkasi/electron-mcp-server](https://github.com/amafjarkasi/electron-mcp-server)** and **Playwright**. Direct WebSocket CDP integration provides complete DOM access, network/console interception, and main-process Node.js evaluation.
+
+### F. Which projects have the strongest AI/MCP architecture?
+
+**[sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)** for token economy (diff engine), coupled with **[shanselman/FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP)** for session-cached opaque references (`ref=w1e47`).
+
+### G. Which projects have the strongest snapshot/observation model?
+
+**[sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)** for semantic text trees (saving 95% of tokens via diffs), and **[microsoft/OmniParser](https://github.com/microsoft/OmniParser)** for pure visual grounding (combining YOLO interactable detection with Florence-2 icon semantics).
+
+### H. Which projects have the strongest evidence/verification model?
+
+**[xlang-ai/OSWorld](https://github.com/xlang-ai/OSWorld)** and **[microsoft/UFO](https://github.com/microsoft/UFO)**. Both capture paired pre/post-action screenshots, detailed JSON execution traces, and OS-level state validations.
+
+### I. What important capability gaps remain?
+
+1. Dynamic, zero-configuration cross-boundary bridging from native WPF/WinUI shells into embedded WebView2/CEF viewports.
+2. Token-efficient, non-blocking UI settling and mutation detection without COM event crashes.
+3. Cryptographically verifiable forensic audit trails proving underlying data mutations beyond surface-level pixel changes.
+
+### J. Which 5–10 projects should we investigate deeply in subsequent research tracks?
+
+1. **[sbroenne/mcp-windows](https://github.com/sbroenne/mcp-windows)**: For its incremental diff snapshot engine, contract-tested CLI parity, and STA COM architecture.
+2. **[FlaUI/FlaUI](https://github.com/FlaUI/FlaUI)**: For its robust unmanaged UIA3 wrapper, batch cache requests, and pattern fallbacks.
+3. **[shanselman/FlaUI-MCP](https://github.com/shanselman/FlaUI-MCP)**: For its Playwright-style opaque element reference registry (`ref=w1e47`) and atomic batch execution.
+4. **[epnielsen/Winapp-MCP](https://github.com/epnielsen/Winapp-MCP)**: For its ranked candidate ambiguity resolution and subtree boundary scoping.
+5. **[amafjarkasi/electron-mcp-server](https://github.com/amafjarkasi/electron-mcp-server)**: For dynamic debug port extraction and dual-layer renderer/main-process inspection.
+6. **[glaciousm/winjavadriver](https://github.com/glaciousm/winjavadriver)**: For W3C WebDriver parity and legacy Win32/MSAA fallback mechanisms.
+7. **[microsoft/UFO](https://github.com/microsoft/UFO)**: For dual-agent HostAgent/AppAgent orchestration and Set-of-Marks integration.
+8. **[simular-ai/Agent-S](https://github.com/simular-ai/Agent-S)**: For its OpenACI framework and CLI-first / GUI-fallback hybrid planning paradigm.
+
+---
+
+### Research Deliverable
+
+The complete 70KB Markdown report containing granular code snippets, exact schema mappings, and benchmark citations is permanently preserved in Google Drive:
+👉 **[01_EXISTING_PROJECTS.md (Google Drive Document)](https://docs.google.com/document/d/1duMY_6p_IJvYs5UfbqA5Eaoc3VZyehrprWgsgo28gGM/edit?usp=drivesdk&ouid=100150596005450321153)**
