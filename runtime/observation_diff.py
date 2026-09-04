@@ -49,6 +49,22 @@ class ObservationDiffResult:
     modified: Tuple[DiffItem, ...] = field(default_factory=tuple)
     text_diff: str = ""
 
+    @property
+    def added_count(self) -> int:
+        return len(self.added)
+
+    @property
+    def removed_count(self) -> int:
+        return len(self.removed)
+
+    @property
+    def modified_count(self) -> int:
+        return len(self.modified)
+
+    @property
+    def mutated_count(self) -> int:
+        return len(self.modified)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "from_epoch": self.from_epoch,

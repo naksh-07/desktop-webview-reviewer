@@ -31,4 +31,5 @@ bin/
 obj/
 *.egg-info/
 
-
+# Ephemeral evidence directory
+evidence/

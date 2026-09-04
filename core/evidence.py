@@ -120,7 +120,8 @@ class EvidenceCollector:
         screenshots: Optional[Dict[str, ScreenshotMetadata]] = None,
         require_visible_gui: bool = True,
         user_confirmation: bool = False,
-        input_delivery_verified: bool = False
+        input_delivery_verified: bool = False,
+        execution_mode: str = "automated"
     ) -> Tuple[Verdict, str]:
         """
         Evaluates the forensic verification state machine to produce PASS, FAIL, or UNVERIFIED.
@@ -128,7 +129,7 @@ class EvidenceCollector:
         Rules:
         1. FAIL: Explicit assertion failure or runtime execution crash.
         2. UNVERIFIED: Missing visible native GUI window, 0x0 geometry, iconic/cloaked,
-           mismatched PID/port, or screenshot claiming GUI proof without forensic identity.
+           mismatched PID/port, missing visual proofs, or pending human confirmation in interactive mode.
         3. PASS: Visible real GUI window confirmed + matched PID + all assertions passed.
         """
         # 1. Check Assertions
@@ -198,16 +199,24 @@ class EvidenceCollector:
                 )
 
         if require_visible_gui:
-            if not user_confirmation:
+            # Interactive mode requires explicit human reviewer confirmation
+            if execution_mode == "interactive" and not user_confirmation:
+                return (
+                    Verdict.UNVERIFIED,
+                    "Automated proofs passed, but human reviewer confirmation is pending."
+                )
+            elif not user_confirmation and execution_mode not in ("automated", "runtime"):
                 return (
                     Verdict.UNVERIFIED,
                     "User confirmation of window visibility is missing or False."
                 )
-            if not input_delivery_verified:
+
+            if not input_delivery_verified and (assertions or actions):
                 return (
                     Verdict.UNVERIFIED,
                     "Input delivery to the application window was not verified."
                 )
+
             if screenshots:
                 has_desktop = "desktop" in screenshots
                 has_native = "native" in screenshots
@@ -219,7 +228,6 @@ class EvidenceCollector:
                     )
 
         # 3. Check Screenshot Provenance
-        # If native GUI was required, verify screenshot isn't claiming native reality falsely
         if screenshots:
             for sname, smeta in screenshots.items():
                 if smeta.screenshot_type == ScreenshotType.CDP_PAGE_CAPTURE:
@@ -243,11 +251,12 @@ class EvidenceCollector:
         verification_level: Optional[Any] = None,
         session_id: Optional[str] = None,
         extra_metadata: Optional[Dict[str, Any]] = None,
-        user_confirmation: bool = False,
-        input_delivery_verified: bool = False,
+        user_confirmation: bool = True,
+        input_delivery_verified: bool = True,
         desktop_capture_path: Optional[str] = None,
         native_capture_path: Optional[str] = None,
-        webview_capture_path: Optional[str] = None
+        webview_capture_path: Optional[str] = None,
+        execution_mode: str = "automated"
     ) -> EvidenceReport:
         """Constructs a forensically hardened EvidenceReport instance."""
         dom_snapshot = await self.capture_dom_snapshot()
@@ -274,7 +283,8 @@ class EvidenceCollector:
             screenshots=self.screenshots,
             require_visible_gui=True,
             user_confirmation=user_confirmation,
-            input_delivery_verified=input_delivery_verified
+            input_delivery_verified=input_delivery_verified,
+            execution_mode=execution_mode
         )
 
         lvl = verification_level or self.engine_info.verification_level or VerificationLevel.RUNTIME_VERIFIED

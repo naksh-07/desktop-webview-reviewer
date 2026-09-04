@@ -44,6 +44,13 @@ from runtime.errors import (
     ActionExecutionException,
     ActionDispatchRejectedException,
 )
+from runtime.evidence_models import (
+    VerificationVerdict,
+    ProofLevel,
+    EvidenceManifest,
+)
+from runtime.evidence_store import EvidenceStore
+from runtime.verification_engine import VerificationEngine
 
 logger = logging.getLogger("desktop_webview.action_engine")
 
@@ -68,6 +75,8 @@ class ActionExecutionEngine:
         locator_engine: Optional[DeterministicLocatorEngine] = None,
         web_executor: Optional[WebActionExecutor] = None,
         native_executor: Optional[NativeActionExecutor] = None,
+        evidence_store: Optional[EvidenceStore] = None,
+        verification_engine: Optional[VerificationEngine] = None,
     ):
         self.session_id = session_id
         self.reference_registry: ReferenceRegistry = (
@@ -87,7 +96,7 @@ class ActionExecutionEngine:
             actionability_engine
             or (web_executor.actionability_engine if web_executor else None)
             or ActionabilityEngine(
-                registry=self.reference_registry,
+                reference_registry=self.reference_registry,
                 native_supervisor=self.native_supervisor,
                 webview_core=self.webview_core,
                 flaui_bridge=self.flaui_bridge,
@@ -144,13 +153,21 @@ class ActionExecutionEngine:
                 flaui_bridge=self.flaui_bridge,
             )
 
+        # Verification & Evidence
+        self.evidence_store = evidence_store or EvidenceStore()
+        self.verification_engine = verification_engine or VerificationEngine(evidence_store=self.evidence_store)
+
         self.receipt_history: List[ActionReceipt] = []
         self.outcome_history: List[ActionOutcome] = []
+        self.manifest_history: List[EvidenceManifest] = []
         self._lock = asyncio.Lock()
 
     async def execute(
         self,
         request: ActionRequest,
+        verify: bool = True,
+        execution_mode: str = "automated",
+        user_confirmed: bool = False,
     ) -> ActionOutcome:
         """
         Executes the complete action-observation transaction loop:
@@ -161,6 +178,7 @@ class ActionExecutionEngine:
         5. Bounded settlement (polling layout, modal, navigation).
         6. Advance observation epoch and capture post-action snapshot.
         7. Compute observation diff and classify outcome.
+        8. Deterministic verification and cryptographic evidence sealing.
         """
         async with self._lock:
             cycle_start = time.time()
@@ -168,6 +186,17 @@ class ActionExecutionEngine:
 
             # 1. Target Resolution & Stale Recovery
             target, recovered_from = await self._resolve_target(request)
+
+            # Capture pre-state observation if not already cached
+            pre_snapshot = self.observation_engine.last_snapshot
+            if pre_snapshot is None or pre_snapshot.epoch != pre_epoch:
+                try:
+                    pre_snapshot = await self.observation_engine.observe(
+                        hwnd=target.native_hwnd,
+                        target_id=target.cdp_target_id,
+                    )
+                except Exception as e:
+                    logger.debug(f"Pre-action observation attempt skipped: {e}")
 
             # 2. Immediate Precondition Revalidation
             preconditions = await self.actionability_engine.evaluate_actionability(
@@ -255,6 +284,39 @@ class ActionExecutionEngine:
                     duration_ms=(time.time() - cycle_start) * 1000.0,
                     details={"dispatch_error": receipt.error},
                 )
+                if verify and self.verification_engine:
+                    try:
+                        v, m, _ = self.verification_engine.evaluate_transaction(
+                            session_id=self.session_id,
+                            action_request=request,
+                            action_receipt=receipt,
+                            action_outcome=outcome,
+                            pre_snapshot=pre_snapshot,
+                            post_snapshot=None,
+                            observation_diff=None,
+                            execution_mode=execution_mode,
+                            user_confirmed=user_confirmed,
+                        )
+                        outcome = ActionOutcome(
+                            action_id=outcome.action_id,
+                            session_id=outcome.session_id,
+                            receipt=outcome.receipt,
+                            outcome_status=outcome.outcome_status,
+                            state_change=outcome.state_change,
+                            pre_epoch=outcome.pre_epoch,
+                            post_epoch=outcome.post_epoch,
+                            post_snapshot=outcome.post_snapshot,
+                            observation_diff=outcome.observation_diff,
+                            duration_ms=outcome.duration_ms,
+                            details={**outcome.details, "manifest": m.to_dict()},
+                            timestamp=outcome.timestamp,
+                            verdict=v.value,
+                            manifest=m,
+                        )
+                        self.manifest_history.append(m)
+                    except Exception as e:
+                        logger.error(f"Verification evaluation failed on rejected dispatch: {e}")
+
                 self.outcome_history.append(outcome)
                 return outcome
 
@@ -310,7 +372,7 @@ class ActionExecutionEngine:
                 nav_url = settle_res.details.get("navigated_url")
             elif settle_res.settlement_type == SettlementType.TARGET_DISAPPEARED:
                 state_change = StateChangeClassification.TARGET_DISAPPEARED
-            elif diff and (diff.added_count > 0 or diff.removed_count > 0 or diff.mutated_count > 0):
+            elif diff and (len(diff.added) > 0 or len(diff.removed) > 0 or len(diff.modified) > 0):
                 state_change = StateChangeClassification.STATE_CHANGED
             else:
                 # Check if target element exists in post-snapshot
@@ -351,6 +413,52 @@ class ActionExecutionEngine:
                     "diff_summary": diff.to_dict() if diff else None,
                 },
             )
+
+            if verify and self.verification_engine:
+                try:
+                    tree_pids = [target_pid] if target_pid else []
+                    try:
+                        import psutil
+                        if target_pid:
+                            p = psutil.Process(target_pid)
+                            tree_pids.extend([c.pid for c in p.children(recursive=True)])
+                    except Exception:
+                        pass
+                    proc_info = {"pid": target_pid, "process_tree": tree_pids, "is_running": True} if target_pid else None
+                    v, m, _ = self.verification_engine.evaluate_transaction(
+                        session_id=self.session_id,
+                        action_request=request,
+                        action_receipt=receipt,
+                        action_outcome=outcome,
+                        pre_snapshot=pre_snapshot,
+                        post_snapshot=post_snapshot,
+                        observation_diff=diff,
+                        target_process_info=proc_info,
+                        execution_mode=execution_mode,
+                        user_confirmed=user_confirmed,
+                    )
+                    outcome = ActionOutcome(
+                        action_id=outcome.action_id,
+                        session_id=outcome.session_id,
+                        receipt=outcome.receipt,
+                        outcome_status=outcome.outcome_status,
+                        state_change=outcome.state_change,
+                        pre_epoch=outcome.pre_epoch,
+                        post_epoch=outcome.post_epoch,
+                        post_snapshot=outcome.post_snapshot,
+                        observation_diff=outcome.observation_diff,
+                        modal_details=outcome.modal_details,
+                        navigation_url=outcome.navigation_url,
+                        duration_ms=outcome.duration_ms,
+                        details={**outcome.details, "manifest": m.to_dict()},
+                        timestamp=outcome.timestamp,
+                        verdict=v.value,
+                        manifest=m,
+                    )
+                    self.manifest_history.append(m)
+                except Exception as e:
+                    logger.error(f"Verification evaluation failed: {e}")
+
             self.outcome_history.append(outcome)
             return outcome
 

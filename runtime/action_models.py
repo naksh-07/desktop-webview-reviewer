@@ -244,6 +244,8 @@ class ActionOutcome:
     duration_ms: float = 0.0
     details: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
+    verdict: Optional[str] = None
+    manifest: Optional[Any] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -261,4 +263,6 @@ class ActionOutcome:
             "duration_ms": self.duration_ms,
             "details": self.details,
             "timestamp": self.timestamp,
+            "verdict": self.verdict,
+            "has_manifest": self.manifest is not None,
         }

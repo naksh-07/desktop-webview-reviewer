@@ -99,7 +99,7 @@ class ElementRef:
     backend_id: Optional[Any] = None
     target_id: Optional[str] = None
     confidence: float = 1.0
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict[str, Any]:
         return {

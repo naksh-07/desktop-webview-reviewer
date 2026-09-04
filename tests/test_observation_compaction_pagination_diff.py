@@ -145,12 +145,16 @@ class TestCompactionPaginationDiff(unittest.TestCase):
         self.assertEqual(diff_res.to_epoch, 2)
 
         self.assertEqual(len(diff_res.added), 1)
+        self.assertEqual(diff_res.added_count, 1)
         self.assertEqual(diff_res.added[0].name, "Submit")
 
         self.assertEqual(len(diff_res.removed), 1)
+        self.assertEqual(diff_res.removed_count, 1)
         self.assertEqual(diff_res.removed[0].name, "Start Quiz")
 
         self.assertEqual(len(diff_res.modified), 1)
+        self.assertEqual(diff_res.modified_count, 1)
+        self.assertEqual(diff_res.mutated_count, 1)
         self.assertEqual(diff_res.modified[0].name, "Name")
         self.assertTrue(any("text: 'Alice' -> 'Bob'" in c for c in diff_res.modified[0].changes))
 

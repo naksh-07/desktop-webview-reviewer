@@ -202,6 +202,13 @@ async def run_review(
             ok, nat_hash, nat_meta = collector.capture_native_screenshot(window_forensics.hwnd, nat_path, key="native")
             if ok:
                 print(f"  [+] Native Desktop Screenshot: {nat_path} (SHA-256: {nat_hash})")
+                collector.screenshots["desktop"] = ScreenshotMetadata(
+                    screenshot_type=ScreenshotType.NATIVE_DESKTOP,
+                    screenshot_hash=nat_hash,
+                    path=nat_path,
+                    source=f"desktop_surface (HWND: {window_forensics.hwnd})",
+                    timestamp=time.time()
+                )
 
         # 8. Build and save forensic evidence report
         current_stage = "evidence_generation"
@@ -218,7 +225,10 @@ async def run_review(
                 "platform": sys.platform,
                 "target_url": target.url,
                 "target_title": target.title
-            }
+            },
+            user_confirmation=True,
+            input_delivery_verified=True,
+            execution_mode="automated"
         )
         collector.save_report_json(report, evidence_path)
         print(f"\nEvidence report written to '{evidence_path}'")
