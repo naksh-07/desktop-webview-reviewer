@@ -74,8 +74,17 @@ class SessionState:
     diagnostic_state: Dict[str, Any] = field(default_factory=dict)
     cleanup_state: Dict[str, Any] = field(default_factory=dict)
 
-    # Webview Automation Core
+    # Webview Automation Core & Engine Subsystems
     webview_core: Optional[Any] = None
+    observation_engine: Optional[Any] = None
+    action_engine: Optional[Any] = None
+    actionability_engine: Optional[Any] = None
+    native_supervisor: Optional[Any] = None
+    flaui_bridge: Optional[Any] = None
+    evidence_store: Optional[Any] = None
+    verification_engine: Optional[Any] = None
+    last_outcome: Optional[Any] = None
+    executed_actions: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         self.reference_registry = ReferenceRegistry(session_id=self.session_id)

@@ -7,7 +7,7 @@ name = "desktop-webview-reviewer"
 version = "1.0.0"
 description = "Universal desktop application webview testing, inspection, and verification capability."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "Google DeepMind Advanced Agentic Coding Team" }
@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
     "websockets>=11.0",
     "psutil>=5.9.0",
+    "mcp>=2.1.0",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +47,7 @@ desktop-webview-discover = "scripts.discover:main"
 desktop-webview-review = "scripts.review:main"
 desktop-webview-stop = "scripts.stop:main"
 desktop-webview-attach = "scripts.attach:main"
+desktop-webview-mcp = "runtime.mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

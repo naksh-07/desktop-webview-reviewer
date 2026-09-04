@@ -308,6 +308,10 @@ class EvidenceManifest:
     schema_version: str = "https://desktop-webview-reviewer.org/schemas/evidence-manifest-v2.json"
     details: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def evidence_id(self) -> str:
+        return self.manifest_id
+
     def to_dict(self, include_hash: bool = True) -> Dict[str, Any]:
         d: Dict[str, Any] = {
             "$schema": self.schema_version,

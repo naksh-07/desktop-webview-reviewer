@@ -855,8 +855,7 @@ class VerificationEngine:
             )
 
         # Check explicit state changes
-        has_mutations = diff and (len(diff.added) > 0 or len(diff.removed) > 0 or len(diff.modified) > 0)
-        has_epoch_advance = post_snapshot.epoch > pre_snapshot.epoch
+        has_epoch_advance = (post_snapshot.epoch > pre_snapshot.epoch) if (post_snapshot and pre_snapshot) else (outcome.post_epoch > outcome.pre_epoch if outcome else False)
 
         if expected_effect:
             if outcome.state_change in (

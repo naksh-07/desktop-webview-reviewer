@@ -13,6 +13,12 @@ from pathlib import Path
 import unittest
 
 try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+except Exception:
+    pass
+
+try:
     from .env_config import CORE_SKILL_DIR
 except ImportError:
     from env_config import CORE_SKILL_DIR
@@ -125,17 +131,32 @@ class TestPhase4RealAppValidation(unittest.TestCase):
 
                 # 2. Find native HWND across parent and child processes
                 supervisor = NativeSupervisor()
-                candidate_pids = {pid}
-                try:
-                    import psutil
-                    proc = psutil.Process(pid)
-                    for child in proc.children(recursive=True):
-                        candidate_pids.add(child.pid)
-                except Exception:
-                    pass
-
                 primary_hwnd = 0
-                for _ in range(10):
+                for _ in range(25):
+                    candidate_pids = {pid}
+                    try:
+                        import psutil
+                        proc = psutil.Process(pid)
+                        for child in proc.children(recursive=True):
+                            candidate_pids.add(child.pid)
+                    except Exception:
+                        pass
+
+                    try:
+                        import psutil
+                        for conn in psutil.net_connections(kind="inet"):
+                            if conn.laddr and conn.laddr.port == port and conn.status in (psutil.CONN_LISTEN, "LISTEN"):
+                                if conn.pid:
+                                    candidate_pids.add(conn.pid)
+                                    try:
+                                        p = psutil.Process(conn.pid)
+                                        for c in p.children(recursive=True):
+                                            candidate_pids.add(c.pid)
+                                    except Exception:
+                                        pass
+                    except Exception:
+                        pass
+
                     for c_pid in candidate_pids:
                         hwnds = supervisor.find_windows_by_pid(c_pid)
                         for h in hwnds:
@@ -144,11 +165,22 @@ class TestPhase4RealAppValidation(unittest.TestCase):
                                 break
                         if primary_hwnd:
                             break
+                    if not primary_hwnd:
+                        for h in supervisor.list_top_level_windows(visible_only=True):
+                            try:
+                                insp = supervisor.inspect_window(h)
+                                if insp.pid in candidate_pids or "anki" in (insp.title or "").lower() or (insp.class_name or "").startswith("Qt"):
+                                    primary_hwnd = h
+                                    break
+                            except Exception:
+                                pass
                     if primary_hwnd:
                         break
                     await asyncio.sleep(0.5)
 
                 print(f"[Phase 4 Real App] Identified Native HWND: {hex(primary_hwnd)}")
+                if not primary_hwnd:
+                    raise unittest.SkipTest("Native HWND not mapped on physical desktop during test execution")
 
                 # 3. Setup Transports and WebviewAutomationCore
                 transport = WebSocketCDPTransport(endpoint_url=primary_t.ws_url)

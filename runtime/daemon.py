@@ -223,3 +223,21 @@ class DesktopDaemon:
                 state_transition=f"{DaemonLifecycleState.SHUTTING_DOWN.value} -> {DaemonLifecycleState.STOPPED.value}",
             ))
             logger.info("DesktopDaemon stopped cleanly. Teardown verified.")
+
+
+_default_daemon: Optional[DesktopDaemon] = None
+
+
+def get_default_daemon() -> DesktopDaemon:
+    """Returns the persistent singleton DesktopDaemon instance across client reconnections."""
+    global _default_daemon
+    if _default_daemon is None:
+        _default_daemon = DesktopDaemon()
+    return _default_daemon
+
+
+def reset_default_daemon() -> None:
+    """Resets the singleton DesktopDaemon instance (for testing)."""
+    global _default_daemon
+    _default_daemon = None
+

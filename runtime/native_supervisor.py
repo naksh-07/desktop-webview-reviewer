@@ -658,6 +658,14 @@ class NativeOSSupervisor:
 
         cb = w32.WNDENUMPROC(enum_cb)
         w32.user32.EnumWindows(cb, 0)
+        if not hwnds and hasattr(ctypes, "windll") and hasattr(ctypes.windll, "user32"):
+            try:
+                hdesk = ctypes.windll.user32.OpenInputDesktop(0, False, 0x01FF)
+                if hdesk:
+                    ctypes.windll.user32.SetThreadDesktop(hdesk)
+                    w32.user32.EnumWindows(cb, 0)
+            except Exception:
+                pass
         return hwnds
 
     @classmethod

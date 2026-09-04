@@ -244,6 +244,14 @@ class ReferenceRegistry:
         """Returns all valid references registered in the current epoch."""
         return list(self._active_refs.values())
 
+    def get_active_refs(self) -> List[str]:
+        """Returns all active ref_id identifiers registered in the current epoch."""
+        return list(self._active_refs.keys())
+
+    def get_ref(self, ref_id: str) -> Optional[ElementRef]:
+        """Safely returns ElementRef if registered in active or stale storage, or None."""
+        return self._active_refs.get(ref_id) or self._stale_refs.get(ref_id)
+
     def clear(self) -> None:
         """Clears all registered references and resets registry."""
         self._active_refs.clear()
