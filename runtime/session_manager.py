@@ -95,7 +95,7 @@ class SessionState:
 
     @property
     def is_closed(self) -> bool:
-        return self.lifecycle_state == SessionLifecycleState.CLOSED
+        return self.lifecycle_state in (SessionLifecycleState.CLOSED, SessionLifecycleState.TERMINATED)
 
     @property
     def current_epoch(self) -> int:
@@ -199,6 +199,44 @@ class SessionManager:
         async with self._lock:
             session.transition_lifecycle(SessionLifecycleState.ACTIVE)
             session.active_plane = plane
+            return session
+
+    async def mark_degraded(self, session_id: str, reason: str = "degraded_subsystem") -> SessionState:
+        """Transitions session to DEGRADED state when a non-fatal fault occurs (e.g. AX freeze or CDP socket drop)."""
+        session = self.get_session(session_id)
+        async with self._lock:
+            session.transition_lifecycle(SessionLifecycleState.DEGRADED)
+            session.diagnostic_state["degraded_reason"] = reason
+            logger.warning(f"Session {session_id} entered DEGRADED state: {reason}")
+            return session
+
+    async def mark_target_lost(self, session_id: str, reason: str = "target_process_or_window_lost") -> SessionState:
+        """Transitions session to TARGET_LOST state when target window or process exits unexpectedly."""
+        session = self.get_session(session_id)
+        async with self._lock:
+            session.transition_lifecycle(SessionLifecycleState.TARGET_LOST)
+            session.diagnostic_state["target_lost_reason"] = reason
+            logger.error(f"Session {session_id} entered TARGET_LOST state: {reason}")
+            return session
+
+    async def mark_recoverable(self, session_id: str, reason: str = "reconnection_candidate") -> SessionState:
+        """Transitions session to RECOVERABLE state awaiting explicit agent or supervisor re-attach."""
+        session = self.get_session(session_id)
+        async with self._lock:
+            session.transition_lifecycle(SessionLifecycleState.RECOVERABLE)
+            session.diagnostic_state["recoverable_reason"] = reason
+            logger.info(f"Session {session_id} entered RECOVERABLE state: {reason}")
+            return session
+
+    async def mark_recovered(self, session_id: str) -> SessionState:
+        """Transitions session back to ACTIVE state following verified reconnection."""
+        session = self.get_session(session_id)
+        async with self._lock:
+            session.transition_lifecycle(SessionLifecycleState.ACTIVE)
+            session.diagnostic_state.pop("target_lost_reason", None)
+            session.diagnostic_state.pop("degraded_reason", None)
+            session.diagnostic_state.pop("recoverable_reason", None)
+            logger.info(f"Session {session_id} successfully RECOVERED to ACTIVE state")
             return session
 
     async def heartbeat(self, session_id: str) -> None:

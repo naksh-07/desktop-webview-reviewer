@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 
 from runtime.action_models import ActionRequest, ActionType, ActionRiskLevel
 from runtime.mcp.errors import map_exception_to_mcp_error, McpControlPlaneException, McpErrorCode
+from runtime.mcp.security import SecurityGate
 from runtime.mcp.runtime_bridge import RuntimeBridge
 
 logger = logging.getLogger("desktop_webview.mcp.tools.actions")
@@ -28,6 +29,7 @@ def _format_action_result(outcome: Any, post_snapshot_str: Optional[str], cached
         "cached": cached,
         "duration_ms": round(getattr(outcome, "duration_ms", 0.0), 2),
         "action_receipt": receipt_summary,
+        "receipt": receipt.to_dict(),
         "new_epoch_id": outcome.post_epoch,
         "status": outcome.outcome_status.value if hasattr(outcome.outcome_status, "value") else str(outcome.outcome_status),
     }
@@ -54,13 +56,15 @@ async def desktop_click_impl(
     Enforces the composite actionability gate, motion settlement, and fused post-observation.
     """
     try:
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        clean_ref = SecurityGate.validate_ref(ref)
+        session = bridge.get_session(clean_sid)
         act_id = action_id or str(uuid.uuid4())
 
         request = ActionRequest(
             action_id=act_id,
-            session_id=session_id,
-            reference=ref,
+            session_id=clean_sid,
+            reference=clean_ref,
             action_type=ActionType.DOUBLE_CLICK if click_count == 2 else (ActionType.RIGHT_CLICK if button == "right" else ActionType.CLICK),
             observation_epoch=session.current_epoch,
             params={"click_count": click_count, "button": button},
@@ -89,16 +93,19 @@ async def desktop_type_impl(
     Types text into an input affordance with authentic event bubbling across native and web planes.
     """
     try:
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        clean_ref = SecurityGate.validate_ref(ref)
+        clean_text = SecurityGate.validate_text_input(text)
+        session = bridge.get_session(clean_sid)
         act_id = action_id or str(uuid.uuid4())
 
         request = ActionRequest(
             action_id=act_id,
-            session_id=session_id,
-            reference=ref,
+            session_id=clean_sid,
+            reference=clean_ref,
             action_type=ActionType.TYPE,
             observation_epoch=session.current_epoch,
-            params={"text": text, "clear_existing": clear_existing, "press_enter": press_enter},
+            params={"text": clean_text, "clear_existing": clear_existing, "press_enter": press_enter},
             timeout_ms=timeout_ms,
         )
 
@@ -122,16 +129,20 @@ async def desktop_press_key_impl(
     Dispatches navigation or shortcut key combinations (e.g. 'Enter', 'Escape', 'Tab', 'Control+A').
     """
     try:
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        session = bridge.get_session(clean_sid)
         act_id = action_id or str(uuid.uuid4())
 
-        # If ref is not supplied, use active window root or focused control
-        target_ref = ref or (session.reference_registry.get_active_refs()[0] if session.reference_registry.get_active_refs() else "w1e1")
+        # If ref is supplied, validate it; otherwise use active window root or focused control
+        if ref:
+            clean_ref = SecurityGate.validate_ref(ref)
+        else:
+            clean_ref = session.reference_registry.get_active_refs()[0] if session.reference_registry.get_active_refs() else "w1e1"
 
         request = ActionRequest(
             action_id=act_id,
-            session_id=session_id,
-            reference=target_ref,
+            session_id=clean_sid,
+            reference=clean_ref,
             action_type=ActionType.KEY_PRESS,
             observation_epoch=session.current_epoch,
             params={"key": key},
@@ -157,13 +168,15 @@ async def desktop_hover_impl(
     Hovers the cursor over an element affordance to trigger tooltips or CSS hover states with motion settlement.
     """
     try:
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        clean_ref = SecurityGate.validate_ref(ref)
+        session = bridge.get_session(clean_sid)
         act_id = action_id or str(uuid.uuid4())
 
         request = ActionRequest(
             action_id=act_id,
-            session_id=session_id,
-            reference=ref,
+            session_id=clean_sid,
+            reference=clean_ref,
             action_type=ActionType.HOVER,
             observation_epoch=session.current_epoch,
             params={},
@@ -191,15 +204,19 @@ async def desktop_scroll_impl(
     Scrolls a container or window element to bring targets into view.
     """
     try:
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        session = bridge.get_session(clean_sid)
         act_id = action_id or str(uuid.uuid4())
 
-        target_ref = ref or (session.reference_registry.get_active_refs()[0] if session.reference_registry.get_active_refs() else "w1e1")
+        if ref:
+            clean_ref = SecurityGate.validate_ref(ref)
+        else:
+            clean_ref = session.reference_registry.get_active_refs()[0] if session.reference_registry.get_active_refs() else "w1e1"
 
         request = ActionRequest(
             action_id=act_id,
-            session_id=session_id,
-            reference=target_ref,
+            session_id=clean_sid,
+            reference=clean_ref,
             action_type=ActionType.SCROLL,
             observation_epoch=session.current_epoch,
             params={"direction": direction, "delta_y": delta_y},

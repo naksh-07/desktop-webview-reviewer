@@ -12,14 +12,31 @@ from runtime.errors import InvalidStateTransitionError
 class SessionLifecycleState(str, Enum):
     """
     Explicit lifecycle states for a desktop automation session.
+    Canonical state progression:
+    CREATE -> ATTACH -> ACTIVE -> DEGRADED -> TARGET_LOST -> RECOVERABLE -> TERMINATING -> TERMINATED
     Transitions must be verified against the state machine.
     """
+    # Creation & attachment
     CREATED = "CREATED"
+    CREATE = "CREATED"          # Canonical Phase 8 alias
+    ATTACH = "ATTACH"
+    ATTACHED = "ATTACHED"
     CONNECTING = "CONNECTING"
     CONNECTED = "CONNECTED"
+
+    # Active operational state
     ACTIVE = "ACTIVE"
+
+    # Fault and recovery states
+    DEGRADED = "DEGRADED"
+    TARGET_LOST = "TARGET_LOST"
+    RECOVERABLE = "RECOVERABLE"
+
+    # Termination progression
     DISCONNECTING = "DISCONNECTING"
+    TERMINATING = "TERMINATING"
     CLOSED = "CLOSED"
+    TERMINATED = "TERMINATED"
 
     # Explicit failure states
     FAILED = "FAILED"
@@ -30,15 +47,22 @@ class SessionLifecycleState(str, Enum):
     def valid_transitions(cls) -> Dict[SessionLifecycleState, Set[SessionLifecycleState]]:
         """Maps each state to the set of permissible target states."""
         return {
-            cls.CREATED: {cls.CONNECTING, cls.FAILED, cls.ABORTED, cls.CLOSED},
-            cls.CONNECTING: {cls.CONNECTED, cls.FAILED, cls.ABORTED, cls.CLOSED},
-            cls.CONNECTED: {cls.ACTIVE, cls.DISCONNECTING, cls.FAILED, cls.ABORTED, cls.CLOSED},
-            cls.ACTIVE: {cls.ACTIVE, cls.DISCONNECTING, cls.ERROR, cls.FAILED, cls.ABORTED, cls.CLOSED},
-            cls.DISCONNECTING: {cls.CLOSED, cls.FAILED, cls.ABORTED},
-            cls.ERROR: {cls.DISCONNECTING, cls.FAILED, cls.CLOSED},
-            cls.FAILED: {cls.CLOSED},
-            cls.ABORTED: {cls.CLOSED},
-            cls.CLOSED: set(),  # Terminal state
+            cls.CREATED: {cls.CONNECTING, cls.ATTACH, cls.ATTACHED, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.CONNECTING: {cls.CONNECTED, cls.ATTACHED, cls.ACTIVE, cls.DEGRADED, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.CONNECTED: {cls.ACTIVE, cls.DEGRADED, cls.TARGET_LOST, cls.DISCONNECTING, cls.TERMINATING, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.ATTACH: {cls.ATTACHED, cls.CONNECTED, cls.ACTIVE, cls.DEGRADED, cls.TARGET_LOST, cls.FAILED, cls.ABORTED, cls.TERMINATING, cls.CLOSED, cls.TERMINATED},
+            cls.ATTACHED: {cls.ACTIVE, cls.DEGRADED, cls.TARGET_LOST, cls.DISCONNECTING, cls.TERMINATING, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.ACTIVE: {cls.ACTIVE, cls.DEGRADED, cls.TARGET_LOST, cls.RECOVERABLE, cls.DISCONNECTING, cls.TERMINATING, cls.ERROR, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.DEGRADED: {cls.ACTIVE, cls.TARGET_LOST, cls.RECOVERABLE, cls.DISCONNECTING, cls.TERMINATING, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.TARGET_LOST: {cls.RECOVERABLE, cls.DISCONNECTING, cls.TERMINATING, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.RECOVERABLE: {cls.CONNECTING, cls.ATTACH, cls.ATTACHED, cls.ACTIVE, cls.DEGRADED, cls.TARGET_LOST, cls.DISCONNECTING, cls.TERMINATING, cls.FAILED, cls.ABORTED, cls.CLOSED, cls.TERMINATED},
+            cls.DISCONNECTING: {cls.CLOSED, cls.TERMINATED, cls.FAILED, cls.ABORTED},
+            cls.TERMINATING: {cls.CLOSED, cls.TERMINATED, cls.FAILED, cls.ABORTED},
+            cls.ERROR: {cls.RECOVERABLE, cls.DISCONNECTING, cls.TERMINATING, cls.FAILED, cls.CLOSED, cls.TERMINATED},
+            cls.FAILED: {cls.CLOSED, cls.TERMINATED},
+            cls.ABORTED: {cls.CLOSED, cls.TERMINATED},
+            cls.CLOSED: set(),       # Terminal state
+            cls.TERMINATED: set(),   # Terminal state
         }
 
     def can_transition_to(self, target: SessionLifecycleState) -> bool:
@@ -58,7 +82,7 @@ class SessionLifecycleState(str, Enum):
     @property
     def is_terminal(self) -> bool:
         """Returns True if session has reached a closed/final state."""
-        return self == SessionLifecycleState.CLOSED
+        return self in (SessionLifecycleState.CLOSED, SessionLifecycleState.TERMINATED)
 
     @property
     def is_operational(self) -> bool:

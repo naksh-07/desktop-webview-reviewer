@@ -19,8 +19,8 @@ from runtime.evidence_store import EvidenceStore
 
 logger = logging.getLogger("desktop_webview.mcp.resources")
 
-# Standard 1x1 transparent PNG fallback
-FALLBACK_PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+# Maximum resource payload size: 10 MB
+MAX_RESOURCE_PAYLOAD_SIZE = 10 * 1024 * 1024
 
 
 def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
@@ -46,9 +46,9 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         mime_type="application/json",
     )
     async def get_session_state(session_id: str) -> str:
-        # Validate ID to prevent traversal
-        SecurityGate.validate_resource_uri(f"desktop://sessions/{session_id}")
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        SecurityGate.validate_resource_uri(f"desktop://sessions/{clean_sid}")
+        session = bridge.get_session(clean_sid)
         return json.dumps(session.to_dict(), indent=2)
 
     # 3. desktop://sessions/{session_id}/observation
@@ -59,8 +59,9 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         mime_type="text/plain",
     )
     async def get_session_observation(session_id: str) -> str:
-        SecurityGate.validate_resource_uri(f"desktop://sessions/{session_id}/observation")
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        SecurityGate.validate_resource_uri(f"desktop://sessions/{clean_sid}/observation")
+        session = bridge.get_session(clean_sid)
         if session.observation_engine and session.observation_engine.last_snapshot:
             return session.observation_engine.last_snapshot.text_representation
         snap = await session.observation_engine.observe(
@@ -104,18 +105,23 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
     async def get_evidence_manifest(evidence_id: str) -> str:
         SecurityGate.validate_resource_uri(f"desktop://evidence/{evidence_id}")
         store = EvidenceStore()
+        base_dir_resolved = store.base_dir.resolve()
+
         # Scan session directories for evidence manifest
         for sess_dir in store.base_dir.glob("session-*"):
             manifest_file = sess_dir / f"action-{evidence_id}" / "manifest.json"
-            if manifest_file.exists():
+            if manifest_file.exists() and manifest_file.resolve().is_relative_to(base_dir_resolved):
                 return manifest_file.read_text(encoding="utf-8")
 
         # Fallback direct manifest lookup
         for manifest_path in store.base_dir.rglob("manifest.json"):
             try:
-                data = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if not manifest_path.resolve().is_relative_to(base_dir_resolved):
+                    continue
+                content = manifest_path.read_text(encoding="utf-8")
+                data = json.loads(content)
                 if data.get("evidence_id") == evidence_id or data.get("manifest_id") == evidence_id or evidence_id in str(manifest_path):
-                    return json.dumps(data, indent=2)
+                    return content
             except Exception:
                 pass
 
@@ -134,22 +140,37 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
     async def get_evidence_screenshot(evidence_id: str, type: str) -> bytes:
         SecurityGate.validate_resource_uri(f"desktop://evidence/{evidence_id}/screenshot/{type}")
         store = EvidenceStore()
+        base_dir_resolved = store.base_dir.resolve()
+        clean_type = type.lower()
 
-        # Find matching screenshot file
-        pattern = f"*{type}*.png"
-        for shot_file in store.base_dir.rglob(pattern):
-            if evidence_id in str(shot_file):
-                return shot_file.read_bytes()
-
-        # Check in artifacts/screenshots/
+        # Check action directories first
         for sess_dir in store.base_dir.glob("session-*"):
             act_dir = sess_dir / f"action-{evidence_id}"
-            if act_dir.exists():
-                for shot_file in act_dir.rglob("*.png"):
-                    if type.lower() in shot_file.name.lower():
+            if act_dir.exists() and act_dir.resolve().is_relative_to(base_dir_resolved):
+                for shot_file in act_dir.glob("*.png"):
+                    if clean_type in shot_file.name.lower() and shot_file.resolve().is_relative_to(base_dir_resolved):
+                        if shot_file.stat().st_size > MAX_RESOURCE_PAYLOAD_SIZE:
+                            raise McpControlPlaneException(
+                                code=McpErrorCode.SECURITY_BLOCKED,
+                                message=f"Screenshot file exceeds maximum size limit ({MAX_RESOURCE_PAYLOAD_SIZE} bytes).",
+                            )
                         return shot_file.read_bytes()
 
-        return FALLBACK_PNG_BYTES
+        # Search matching screenshot file associated with evidence_id
+        pattern = f"*{clean_type}*.png"
+        for shot_file in store.base_dir.rglob(pattern):
+            if evidence_id in str(shot_file) and shot_file.resolve().is_relative_to(base_dir_resolved):
+                if shot_file.stat().st_size > MAX_RESOURCE_PAYLOAD_SIZE:
+                    raise McpControlPlaneException(
+                        code=McpErrorCode.SECURITY_BLOCKED,
+                        message=f"Screenshot file exceeds maximum size limit ({MAX_RESOURCE_PAYLOAD_SIZE} bytes).",
+                    )
+                return shot_file.read_bytes()
+
+        raise McpControlPlaneException(
+            code=McpErrorCode.TARGET_NOT_FOUND,
+            message=f"Screenshot of type '{type}' for evidence '{evidence_id}' not found in evidence store.",
+        )
 
     # 7. desktop://evidence/{evidence_id}/artifact/{artifact_id}
     @server.resource(
@@ -161,11 +182,29 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
     async def get_evidence_artifact(evidence_id: str, artifact_id: str) -> bytes:
         SecurityGate.validate_resource_uri(f"desktop://evidence/{evidence_id}/artifact/{artifact_id}")
         store = EvidenceStore()
-        for art_file in store.base_dir.rglob(f"*{artifact_id}*"):
-            if art_file.is_file():
-                return art_file.read_bytes()
+        base_dir_resolved = store.base_dir.resolve()
+
+        # Disallow wildcard characters in artifact_id
+        if any(c in artifact_id for c in ("*", "?", "[", "]")):
+            raise McpControlPlaneException(
+                code=McpErrorCode.SECURITY_BLOCKED,
+                message=f"Wildcards not permitted in artifact identifier: '{artifact_id}'.",
+            )
+
+        # Check action directories for this evidence_id
+        for sess_dir in store.base_dir.glob("session-*"):
+            act_dir = sess_dir / f"action-{evidence_id}"
+            if act_dir.exists() and act_dir.resolve().is_relative_to(base_dir_resolved):
+                for art_file in act_dir.glob(f"*{artifact_id}*"):
+                    if art_file.is_file() and art_file.resolve().is_relative_to(base_dir_resolved):
+                        if art_file.stat().st_size > MAX_RESOURCE_PAYLOAD_SIZE:
+                            raise McpControlPlaneException(
+                                code=McpErrorCode.SECURITY_BLOCKED,
+                                message=f"Artifact exceeds maximum allowed retrieval size ({MAX_RESOURCE_PAYLOAD_SIZE} bytes).",
+                            )
+                        return art_file.read_bytes()
 
         raise McpControlPlaneException(
             code=McpErrorCode.TARGET_NOT_FOUND,
-            message=f"Evidence artifact '{artifact_id}' not found.",
+            message=f"Evidence artifact '{artifact_id}' not found for evidence '{evidence_id}'.",
         )

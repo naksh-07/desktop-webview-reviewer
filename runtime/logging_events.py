@@ -6,14 +6,52 @@ Captures structured events across session transitions and guarantees that untrus
 
 from __future__ import annotations
 import html
+import itertools
 import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("desktop_webview.lifecycle")
+
+_monotonic_counter = itertools.count(1)
+
+
+class TelemetryRedactor:
+    """
+    Configurable redactor for runtime telemetry and structured event logging.
+    Prevents leaking passwords, tokens, API keys, and unbounded DOM/JS payloads into logs.
+    """
+
+    SENSITIVE_PATTERNS = [
+        re.compile(r'(?i)(password|secret|token|api[_-]?key|bearer|authorization|passwd)[\s*:=]+([^\s,;\"\'}{]+)'),
+        re.compile(r'(?i)\b(bearer\s+[A-Za-z0-9\-\._~\+\/]+=*)'),
+    ]
+
+    MAX_STRING_LENGTH = 500
+
+    @classmethod
+    def redact_text(cls, text: str) -> str:
+        if not text:
+            return ""
+        redacted = text
+        for pat in cls.SENSITIVE_PATTERNS:
+            redacted = pat.sub(r'\1 [REDACTED]', redacted)
+        if len(redacted) > cls.MAX_STRING_LENGTH:
+            redacted = redacted[:cls.MAX_STRING_LENGTH] + "... [TRUNCATED_FOR_TELEMETRY]"
+        return redacted
+
+    @classmethod
+    def redact_value(cls, val: Any) -> Any:
+        if isinstance(val, str):
+            return cls.redact_text(val)
+        elif isinstance(val, dict):
+            return {k: cls.redact_value(v) for k, v in val.items()}
+        elif isinstance(val, (list, tuple)):
+            return [cls.redact_value(item) for item in val]
+        return val
 
 
 @dataclass
@@ -68,50 +106,84 @@ class UntrustedUIText:
 
 @dataclass
 class LifecycleEvent:
-    """Standardized event envelope capturing lifecycle-critical milestones."""
+    """
+    Standardized production telemetry event envelope capturing lifecycle and action milestones.
+    Supports structured logging, duration metrics, sequence ordering, and automatic data redaction.
+    """
     operation: str
     severity: str = "INFO"        # "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
     session_id: Optional[str] = None
+    action_id: Optional[str] = None
+    observation_epoch: Optional[int] = None
     target_id: Optional[str] = None
     pid: Optional[int] = None
     hwnd: Optional[int] = None
+    cdp_target_id: Optional[str] = None
     state_transition: Optional[str] = None
     request_id: Optional[str] = None
     epoch: Optional[int] = None
+    duration_ms: Optional[float] = None
+    status: Optional[str] = "SUCCESS"
     error_code: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    sequence_monotonic: int = field(default_factory=lambda: next(_monotonic_counter))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def __post_init__(self):
+        if self.epoch is not None and self.observation_epoch is None:
+            self.observation_epoch = self.epoch
+        elif self.observation_epoch is not None and self.epoch is None:
+            self.epoch = self.observation_epoch
+
+    @property
+    def timestamp_wall(self) -> str:
+        return self.timestamp.isoformat()
+
+    def to_dict(self, redact: bool = True) -> Dict[str, Any]:
+        raw_details = self.details
+        if redact:
+            raw_details = TelemetryRedactor.redact_value(raw_details)
         return {
-            "timestamp": self.timestamp.isoformat(),
+            "sequence_monotonic": self.sequence_monotonic,
+            "timestamp": self.timestamp_wall,
+            "timestamp_wall": self.timestamp_wall,
             "operation": self.operation,
+            "status": self.status,
+            "duration_ms": self.duration_ms,
             "severity": self.severity,
             "session_id": self.session_id,
+            "action_id": self.action_id,
+            "observation_epoch": self.observation_epoch,
+            "epoch": self.epoch,
             "target_id": self.target_id,
             "pid": self.pid,
             "hwnd": hex(self.hwnd) if self.hwnd is not None else None,
+            "cdp_target_id": self.cdp_target_id,
             "state_transition": self.state_transition,
             "request_id": self.request_id,
-            "epoch": self.epoch,
             "error_code": self.error_code,
-            "details": self.details,
+            "details": raw_details,
         }
 
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
+    def to_json(self, redact: bool = True) -> str:
+        return json.dumps(self.to_dict(redact=redact))
 
     def emit(self) -> None:
         """Logs structured event at appropriate severity."""
-        msg = f"[{self.operation}] session={self.session_id} transition={self.state_transition} pid={self.pid} epoch={self.epoch}"
+        msg = (
+            f"[{self.operation}] seq={self.sequence_monotonic} "
+            f"session={self.session_id} transition={self.state_transition} "
+            f"pid={self.pid} epoch={self.observation_epoch} status={self.status}"
+        )
+        data = self.to_dict(redact=True)
         if self.severity == "DEBUG":
-            logger.debug(msg, extra={"event_data": self.to_dict()})
+            logger.debug(msg, extra={"event_data": data})
         elif self.severity == "WARNING":
-            logger.warning(msg, extra={"event_data": self.to_dict()})
+            logger.warning(msg, extra={"event_data": data})
         elif self.severity in ("ERROR", "CRITICAL"):
-            logger.error(msg, extra={"event_data": self.to_dict()})
+            logger.error(msg, extra={"event_data": data})
         else:
-            logger.info(msg, extra={"event_data": self.to_dict()})
+            logger.info(msg, extra={"event_data": data})
 
 
 class EventAuditor:

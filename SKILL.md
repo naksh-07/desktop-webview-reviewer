@@ -13,6 +13,8 @@ You are equipped to automate, inspect, and forensically verify **actual running 
 - **Generic Chromium & CEF** (Chromium Embedded Framework, CefSharp, OBS, Spotify, standalone embeds)
 - **WebKit** (WebKitGTK on Linux, WKWebView on macOS)
 
+> **AGENT SKILL NOTICE**: The authoritative first-class Agent Skill and 7 declarative workflows are published under [skills/desktop-webview-reviewer/SKILL.md](file:///c:/Users/Suraj/Documents/Antigravity/Desktop-priview/skills/desktop-webview-reviewer/SKILL.md) and [workflows/](file:///c:/Users/Suraj/Documents/Antigravity/Desktop-priview/skills/desktop-webview-reviewer/workflows/). Always adhere to the Physical Reality Primacy, Reference Discipline, and Tripartite Verdict Model defined therein.
+
 ---
 
 ## 1. Golden Law & Forensic Guardrails

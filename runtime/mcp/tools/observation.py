@@ -29,7 +29,8 @@ async def desktop_inspect_impl(
     ref-annotated accessibility tree without raw DOM or huge JSON payloads.
     """
     try:
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        session = bridge.get_session(clean_sid)
         await bridge.initialize_session_engines(
             session,
             primary_hwnd=session.target_window.hwnd if session.target_window else None,
@@ -82,6 +83,7 @@ async def desktop_inspect_impl(
                     ]
 
         return {
+            "session_id": session_id,
             "epoch_id": snapshot.epoch,
             "active_plane": session.active_plane.value,
             "tree": snapshot.text_representation,

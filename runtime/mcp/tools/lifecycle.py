@@ -43,6 +43,7 @@ async def desktop_launch_impl(
 
         # 1. Security Gate Validation
         clean_exe = SecurityGate.validate_executable_path(executable_path)
+        clean_port = SecurityGate.validate_cdp_port(remote_debugging_port)
         cmd_args = [str(clean_exe)] + (list(args) if args else [])
         cwd = str(Path(working_directory).resolve()) if working_directory else None
 
@@ -62,14 +63,14 @@ async def desktop_launch_impl(
             except Exception:
                 pass
 
-        if adapter and remote_debugging_port:
-            env = adapter.prepare_environment(env, port=remote_debugging_port)
-            adapter_flags = adapter.get_launch_args(port=remote_debugging_port)
+        if adapter and clean_port:
+            env = adapter.prepare_environment(env, port=clean_port)
+            adapter_flags = adapter.get_launch_args(port=clean_port)
             for flag in adapter_flags:
                 if flag not in cmd_args:
                     cmd_args.append(flag)
-        elif remote_debugging_port:
-            cmd_args.append(f"--remote-debugging-port={remote_debugging_port}")
+        elif clean_port:
+            cmd_args.append(f"--remote-debugging-port={clean_port}")
 
         # 3. Launch supervised process via DesktopDaemon (Win32 Job Object)
         session = await bridge.daemon.launch_target(
@@ -201,6 +202,7 @@ async def desktop_launch_impl(
             "active_plane": active_plane.value,
             "initial_snapshot": initial_snapshot,
             "observation_epoch": session.current_epoch,
+            "lifecycle_state": session.lifecycle_state.value,
         }
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)
@@ -222,9 +224,11 @@ async def desktop_attach_impl(
     try:
         await bridge.ensure_initialized()
 
+        target_hwnd = SecurityGate.validate_hwnd(hwnd)
+        target_pid = SecurityGate.validate_pid(pid)
+        clean_cdp_port = SecurityGate.validate_cdp_port(cdp_port)
+
         supervisor = NativeSupervisor()
-        target_pid = pid
-        target_hwnd = hwnd
 
         # Resolve HWND / PID by window title pattern if needed
         if not target_hwnd and window_title_pattern:
@@ -251,7 +255,7 @@ async def desktop_attach_impl(
                     target_hwnd = h
                     break
 
-        if not target_pid and not target_hwnd and not cdp_port:
+        if not target_pid and not target_hwnd and not clean_cdp_port:
             raise McpControlPlaneException(
                 code=McpErrorCode.INVALID_ARGUMENT,
                 message="At least one of 'hwnd', 'pid', 'window_title_pattern', or 'cdp_port' must be provided to attach.",
@@ -263,7 +267,7 @@ async def desktop_attach_impl(
         session = await bridge.daemon.attach_target_process(
             pid=resolved_pid,
             hwnd=target_hwnd,
-            cdp_port=cdp_port,
+            cdp_port=clean_cdp_port,
             lease_timeout_sec=300,
         )
 
@@ -323,6 +327,7 @@ async def desktop_attach_impl(
             "active_plane": active_plane.value,
             "initial_snapshot": initial_snapshot,
             "observation_epoch": session.current_epoch,
+            "lifecycle_state": session.lifecycle_state.value,
         }
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)

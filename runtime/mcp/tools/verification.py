@@ -10,6 +10,7 @@ import time
 from typing import Any, Dict, Optional
 
 from runtime.mcp.errors import map_exception_to_mcp_error, McpControlPlaneException, McpErrorCode
+from runtime.mcp.security import SecurityGate
 from runtime.mcp.runtime_bridge import RuntimeBridge
 
 logger = logging.getLogger("desktop_webview.mcp.tools.verification")
@@ -27,6 +28,8 @@ async def desktop_assert_impl(
     Performs an auto-retrying polling assertion on UI state or content before proceeding.
     """
     try:
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        clean_ref = SecurityGate.validate_ref(ref)
         assertion_map = {
             "visible": "is_visible",
             "is_visible": "is_visible",
@@ -45,13 +48,15 @@ async def desktop_assert_impl(
             )
         assertion = normalized_assertion
 
-        if assertion == "has_text" and expected_text is None:
-            raise McpControlPlaneException(
-                code=McpErrorCode.INVALID_ARGUMENT,
-                message="'expected_text' is required when assertion is 'has_text'.",
-            )
+        if assertion == "has_text":
+            if expected_text is None:
+                raise McpControlPlaneException(
+                    code=McpErrorCode.INVALID_ARGUMENT,
+                    message="'expected_text' is required when assertion is 'has_text'.",
+                )
+            expected_text = SecurityGate.validate_text_input(expected_text)
 
-        session = bridge.get_session(session_id)
+        session = bridge.get_session(clean_sid)
         await bridge.initialize_session_engines(
             session,
             primary_hwnd=session.target_window.hwnd if session.target_window else None,

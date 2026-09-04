@@ -41,7 +41,8 @@ async def desktop_handle_dialog_impl(
                 )
             SecurityGate.validate_file_path(file_path)
 
-        session = bridge.get_session(session_id)
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        session = bridge.get_session(clean_sid)
         await bridge.initialize_session_engines(
             session,
             primary_hwnd=session.target_window.hwnd if session.target_window else None,
