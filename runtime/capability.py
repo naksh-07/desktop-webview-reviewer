@@ -25,7 +25,9 @@ class CapabilityCategory(str, Enum):
 
 
 class CapabilityStatus(str, Enum):
+    AVAILABLE = "AVAILABLE"
     SUPPORTED = "SUPPORTED"
+    UNAVAILABLE = "UNAVAILABLE"
     UNSUPPORTED = "UNSUPPORTED"
     UNKNOWN = "UNKNOWN"
     DEGRADED = "DEGRADED"
@@ -283,20 +285,87 @@ class CapabilityMatrix:
         return entry.status if entry else CapabilityStatus.UNKNOWN
 
     def is_supported(self, cap_id: CapabilityId) -> bool:
-        """Returns True only if the capability is explicitly SUPPORTED."""
-        return self.get_status(cap_id) == CapabilityStatus.SUPPORTED
+        """Returns True if the capability is SUPPORTED or AVAILABLE."""
+        return self.get_status(cap_id) in (CapabilityStatus.SUPPORTED, CapabilityStatus.AVAILABLE)
 
     def get_category_capabilities(self, category: CapabilityCategory) -> List[CapabilityEntry]:
         """Returns all capabilities in the given category."""
         return [e for e in self._entries.values() if e.category == category]
 
     def supported_capabilities(self) -> Set[CapabilityId]:
-        """Returns the set of all capabilities currently in SUPPORTED status."""
-        return {e.cap_id for e in self._entries.values() if e.status == CapabilityStatus.SUPPORTED}
+        """Returns the set of all capabilities currently in SUPPORTED or AVAILABLE status."""
+        return {
+            e.cap_id for e in self._entries.values()
+            if e.status in (CapabilityStatus.SUPPORTED, CapabilityStatus.AVAILABLE)
+        }
+
+    def build_negotiation_profile(
+        self,
+        session_id: str,
+        target_id: Optional[str] = None,
+        engine_info: Optional[Dict[str, Any]] = None,
+    ) -> CapabilityNegotiationProfile:
+        """
+        Builds a formal 2.0 Capability Negotiation Profile declaring
+        available, degraded, and unavailable domains with confidence and limitations.
+        """
+        categorized: Dict[str, Dict[str, Any]] = {}
+        limitations: List[str] = []
+
+        for entry in self._entries.values():
+            cat_name = entry.category.value.lower()
+            if cat_name not in categorized:
+                categorized[cat_name] = {}
+            categorized[cat_name][entry.cap_id.value] = {
+                "status": entry.status.value,
+                "reason": entry.reason,
+            }
+            if entry.status == CapabilityStatus.DEGRADED and entry.reason:
+                limitations.append(f"{entry.cap_id.value}: {entry.reason}")
+            elif entry.status in (CapabilityStatus.UNAVAILABLE, CapabilityStatus.UNSUPPORTED) and entry.reason:
+                limitations.append(f"{entry.cap_id.value} (UNAVAILABLE): {entry.reason}")
+
+        # Compute confidence based on ratio of supported to total probed capabilities
+        total_probed = sum(1 for e in self._entries.values() if e.status != CapabilityStatus.UNKNOWN)
+        supported_count = len(self.supported_capabilities())
+        confidence = (supported_count / total_probed) if total_probed > 0 else 0.5
+
+        return CapabilityNegotiationProfile(
+            session_id=session_id,
+            target_id=target_id,
+            engine_info=engine_info or {},
+            capabilities=categorized,
+            limitations=limitations,
+            confidence=round(confidence, 2),
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serializes the entire matrix to a structured dictionary."""
         return {
             cap_id.value: entry.to_dict()
             for cap_id, entry in self._entries.items()
+        }
+
+
+@dataclass(frozen=True)
+class CapabilityNegotiationProfile:
+    """
+    Formal 2.0 Capability Negotiation Profile emitted at session startup.
+    Communicates exact capabilities, degraded fallbacks, and limitations to the controlling agent.
+    """
+    session_id: str
+    target_id: Optional[str]
+    engine_info: Dict[str, Any] = field(default_factory=dict)
+    capabilities: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    limitations: List[str] = field(default_factory=list)
+    confidence: float = 1.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "target_id": self.target_id,
+            "engine_info": self.engine_info,
+            "capabilities": self.capabilities,
+            "limitations": self.limitations,
+            "confidence": self.confidence,
         }

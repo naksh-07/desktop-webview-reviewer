@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0-phase9] - 2026-09-05
+
+### Highlights: Phase 9 — Agent Sovereignty, Capability Architecture & Desktop Superpower Specification
+- **Constitutional Sovereignty Boundary**: Formalized the separation between the controlling agent's mission authority (**WHAT & WHY**) and Desktop WebView Reviewer's technical execution capability (**HOW & VERIFY**). Codified Anti-God-Agent constraints.
+- **2.0 Capability Model & Negotiation**: Established a 6-domain capability model (Visual, Native, WebView, Interaction, Process, Diagnostics) with honest states (`AVAILABLE`, `DEGRADED`, `UNAVAILABLE`, `UNKNOWN`) and dynamic `CapabilityNegotiationProfile`.
+- **Reality Model & Physical Primacy**: Formalized the `RealityTarget` schema reconciling Native HWND, Blink DOM, AXTree, DWM Compositor, and Visual framebuffers under the strict hierarchy: `Physical Desktop Reality > Compositor Reality > DOM/Web Reality`.
+- **Action Contract 2.0**: Codified the 10-phase interaction lifecycle and explicitly segregated the five milestones (`Action Received != Dispatched != Completed != State Changed != Expected State Verified`).
+- **Desktop Trace & Observability**: Specified the 17 canonical trace events with universal correlation envelopes and converged monotonic timeline.
+- **Reviewer Test Harness & Golden Rule**: Specified optional development-build instrumentation (lifecycle signals, diagnostics, test fixtures, fault injection) and enforced the Golden Rule: Black-box reality validation outranks instrumented telemetry. Mandated release CI build-time stripping.
+- **Subordinate Specialist Contracts**: Formulated operational boundaries for Explorer, Tester, Reality Inspector, Debugger, and Evidence Specialist subagents.
+- **Architecture Documentation**: Added Docs 21–27 and the comprehensive Phase 9 Implementation Report in `docs/architecture/`.
+
+---
+
 ## [1.0.0] - 2026-08-24
 
 ### Highlights

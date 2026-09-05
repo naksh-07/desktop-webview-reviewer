@@ -59,6 +59,18 @@ class ActionOutcomeStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class ActionLifecycleStage(str, Enum):
+    """
+    The five discrete interaction milestones of the 2.0 Action Contract.
+    Strictly segregated to eliminate the Dispatch Fallacy (Dispatched != Verified).
+    """
+    ACTION_RECEIVED = "ACTION_RECEIVED"
+    ACTION_DISPATCHED = "ACTION_DISPATCHED"
+    ACTION_COMPLETED = "ACTION_COMPLETED"
+    STATE_CHANGED = "STATE_CHANGED"
+    EXPECTED_STATE_VERIFIED = "EXPECTED_STATE_VERIFIED"
+
+
 class StateChangeClassification(str, Enum):
     """Classification of observed state change between pre- and post-action snapshots."""
     NO_EFFECT = "NO_EFFECT"

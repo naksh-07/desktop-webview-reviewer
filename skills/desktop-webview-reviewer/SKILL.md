@@ -6,13 +6,32 @@ version: 1.0.0
 
 # Desktop WebView Reviewer — Agent Skill & Operational Policy
 
+## 0. Constitutional Sovereignty Boundary & Anti-God-Agent Rule
+Reviewer operates under an unbending constitutional doctrine:
+> **The controlling agent decides WHAT should be done and WHY. Desktop WebView Reviewer decides HOW it can be safely and reliably done.**
+
+```text
+WHAT / WHY (Mission Authority)
+    ↓  Antigravity / TeamPreview / Adaptive Orchestrator
+HOW / VERIFY (Capability Layer)
+    ↓  Desktop WebView Reviewer 2.0
+```
+
+1. **Reviewer Decides (HOW)**: Inspection planes, target resolution, coordinate math, pre-action actionability, settlement duration, stale recovery, evidence hashing, failure classification.
+2. **Reviewer Must NOT Decides (WHAT/WHY)**: What app or workflow to test, what features matter to the business, what unrelated screens to explore, or expanding scope autonomously.
+3. **Anti-God-Agent Mandate**: Reviewer contains zero hidden planning loops. Autonomy is strictly confined inside delegated technical capability boundaries.
+4. **Harness Golden Rule**: The Reviewer Test Harness provides supporting internal diagnostics only. Black-box physical reality validation outranks instrumented telemetry. A harness signal never overrides failed physical reality verification.
+
+---
+
 ## A. Mission
-The **Desktop WebView Reviewer** is an authoritative agent-facing control plane and runtime system designed for:
+The **Desktop WebView Reviewer 2.0** is an authoritative agent-facing control plane and runtime system designed for:
 1. **Desktop Inspection**: Dual-perspective structural discovery across Win32/UIA native window hierarchies and Chromium/CDP web document surfaces.
 2. **Semantic Interaction**: Precise, bounded physical and synthetic input dispatches targeted via ephemeral semantic references (`w1e1`, `n1e2`).
 3. **Hybrid Native/Web Diagnosis**: Discrepancy analysis between OS window composition and webview DOM accessibility trees.
 4. **State Verification**: Deterministic assertion evaluation validating that actions induced physical state changes rather than merely disappearing into empty event loops.
 5. **Cryptographic Forensic Evidence Collection**: Tamper-sealed evidence packages containing dual-plane screenshots, hash manifests, process trees, and tripartite verdicts.
+6. **2.0 Capability Negotiation**: Dynamic startup handshake reporting honest capability states (`AVAILABLE`, `DEGRADED`, `UNAVAILABLE`, `UNKNOWN`) across Visual, Native, WebView, Interaction, Process, and Diagnostics domains.
 
 ---
 
