@@ -29,7 +29,9 @@ HOW / VERIFY (Capability Layer)
 1. **Reviewer Decides (HOW)**: Inspection planes, target resolution, coordinate math, pre-action actionability, settlement duration, stale recovery, evidence hashing, failure classification.
 2. **Reviewer Must NOT Decides (WHAT/WHY)**: What app or workflow to test, what features matter to the business, what unrelated screens to explore, or expanding scope autonomously.
 3. **Anti-God-Agent Mandate**: Reviewer contains zero hidden planning loops. Autonomy is strictly confined inside delegated technical capability boundaries.
-4. **Harness Golden Rule**: The Reviewer Test Harness provides supporting internal diagnostics only. Black-box physical reality validation outranks instrumented telemetry. A harness signal never overrides failed physical reality verification.
+4. **Subordinate Specialists Rule**: Specialists (`Explorer`, `Tester`, `RealityInspector`, `Debugger`, `EvidenceSpecialist`) diagnose and execute delegated technical work. They do not decide the mission.
+5. **Bounded Recovery Rule**: Recovery restores testability. Recovery does not redefine the test. No blind retries without prior diagnosis.
+6. **Harness Golden Rule**: The Reviewer Test Harness provides supporting internal diagnostics only. Black-box physical reality validation outranks instrumented telemetry. A harness signal never overrides failed physical reality verification.
 
 ---
 
@@ -142,6 +144,25 @@ python scripts/review.py --click="#my-button" --assert-selector="#result" --asse
 python scripts/stop.py
 ```
 - Safely terminates reviewer-owned process tree or detaches harmlessly if externally owned.
+
+### Step 5: Subordinate Specialist Invocations & Diagnostics (Phase 15–16)
+```bash
+# List all 5 canonical specialist roles (Explorer, Tester, Reality Inspector, Debugger, Evidence Specialist)
+desktop-reviewer specialists list
+
+# Inspect canonical role contract (permitted tools, forbidden operations, read-only status)
+desktop-reviewer specialists contract EXPLORER [--json]
+
+# Run unified multi-source diagnostic correlation over trace, logs, and compositor state
+desktop-reviewer diagnostics [--session <id>] [--action-id <id>] [--json]
+
+# Inspect circuit breaker status and anti-retry-storm reliability state
+desktop-reviewer recovery status [--json]
+
+# Query deterministic recovery candidate actions for a failure category
+desktop-reviewer recovery candidates WINDOW_CLOAKED [--json]
+```
+
 
 ---
 

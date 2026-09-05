@@ -27,10 +27,18 @@ Phase 9 completes the architectural foundation, constitutional sovereignty bound
 * **Prompt P3 (Phases 13–14):** Reviewer Test Harness Core (wire protocol, local loopback HTTP transport, auth token security), Framework Adapters (Electron, WebView2, Qt), Project Detection & Surgical Injection (`desktop-reviewer harness init/remove`), Build Modes (`DEV`, `REVIEW`, `RELEASE`), and Release Security Validation Gate (`desktop-reviewer harness validate-release`).
 
 
-### 1.3 Known Limitations
+### 1.3 Milestones Completed in Prompt P4 (Phases 15–16)
+* **Specialist Subagent Runtimes:** Operationalized all five canonical specialists (`Explorer`, `Tester`, `RealityInspector`, `Debugger`, `EvidenceSpecialist`) under framework-neutral bounded execution containers. Enforced the Anti-God-Agent rule at runtime.
+* **Delegation & Security Boundaries:** Formalized explicit delegation contracts (`SpecialistDelegation`, `DelegationScope`), runtime tool permission gates, untrusted application observation barriers, and tool call auditing (`ToolAuditRecord`).
+* **Unified Multi-Source Diagnostics:** Built `DiagnosticAggregator` correlating Desktop Trace, process state, native DWM forensics, webview console exceptions, and Reviewer Test Harness telemetry into 19 canonical failure classifications, strictly distinguishing facts from inferences and hypotheses.
+* **Bounded Recovery Engine & Reliability:** Implemented `RecoveryEngine` and anti-retry-storm `CircuitBreaker` (`CLOSED`, `OPEN`, `HALF_OPEN`), enforcing "NO BLIND RETRIES", deterministic recovery policies, timeout budget propagation, and failure preservation.
+* **Architecture Invariants Preserved:** Preserved exact 12-primary-tool MCP surface without tool explosion. Added CLI subcommands `specialists`, `recovery`, `diagnostics`. Completed real-app live failure investigation validation and comprehensive test suites (46 new P4 tests, 0 regressions across 94 P1–P3 tests).
+
+### 1.4 Known Limitations
 * **OS Platform:** Deep compositor inspection requires Windows 10/11 DWM (`dwmapi.dll`). Non-Windows platforms cannot enforce physical visibility outranking DOM state.
 * **WebKit Engine:** Legacy WebKit runtimes on Windows lack standard CDP input emulation and operate in `DEGRADED` interaction mode.
 * **Display Sleep:** In remote desktop disconnects or screen suspension, DWM cloaks surfaces; Reviewer correctly marks visual verification as `UNVERIFIED`.
+
 
 ---
 
@@ -100,8 +108,9 @@ Prompt P3 (Phases 13–14): Reviewer Harness, Framework Adapters & Dev/Review Bu
    │
    ▼
 Prompt P4 (Phases 15–16): Specialist Subagents, Diagnostics & Recovery/Reliability
-         [PENDING] Explorer, Tester, Reality Inspector, Debugger, Evidence Specialist agents,
-         failure classification, self-healing retries, and bounded reliability loops
+         [COMPLETED & VERIFIED] Explorer, Tester, Reality Inspector, Debugger, Evidence Specialist
+         runtimes, delegation contracts, tool boundaries, untrusted data isolation, 19 failure
+         classifications, circuit breaker, bounded recovery, and CLI diagnostics (46 tests passing)
    │
    ▼
 Prompt P5 (Phases 17–18): Explicit Autonomous Review & Antigravity / TeamPreview Integration

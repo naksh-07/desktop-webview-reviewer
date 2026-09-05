@@ -87,12 +87,28 @@ class SessionState:
     harness_service: Optional[Any] = None
     last_outcome: Optional[Any] = None
     executed_actions: Dict[str, Any] = field(default_factory=dict)
+    circuit_breaker: Optional[Any] = None
+    recovery_engine: Optional[Any] = None
+    diagnostic_aggregator: Optional[Any] = None
+    specialist_dispatcher: Optional[Any] = None
 
     def __post_init__(self):
         self.reference_registry = ReferenceRegistry(session_id=self.session_id)
         if self.trace_engine is None:
             from runtime.trace_engine import DesktopTraceEngine
             self.trace_engine = DesktopTraceEngine(session_id=self.session_id)
+        if self.circuit_breaker is None:
+            from runtime.recovery_engine import CircuitBreaker
+            self.circuit_breaker = CircuitBreaker()
+        if self.recovery_engine is None:
+            from runtime.recovery_engine import RecoveryEngine
+            self.recovery_engine = RecoveryEngine(circuit_breaker=self.circuit_breaker)
+        if self.diagnostic_aggregator is None:
+            from runtime.diagnostics import DiagnosticAggregator
+            self.diagnostic_aggregator = DiagnosticAggregator(trace_engine=self.trace_engine)
+        if self.specialist_dispatcher is None:
+            from runtime.specialist_dispatcher import SpecialistDispatcher
+            self.specialist_dispatcher = SpecialistDispatcher()
 
     @property
     def is_active(self) -> bool:

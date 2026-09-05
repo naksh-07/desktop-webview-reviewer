@@ -40,6 +40,10 @@ class DesktopTraceEventType(str, Enum):
     # Harness integration extensions
     HARNESS_SIGNAL = "HARNESS_SIGNAL"
     HARNESS_TELEMETRY = "HARNESS_TELEMETRY"
+    # Specialist & Recovery integration extensions (Phase 15-16)
+    SPECIALIST_LIFECYCLE = "SPECIALIST_LIFECYCLE"
+    SPECIALIST_TOOL_AUDIT = "SPECIALIST_TOOL_AUDIT"
+    RECOVERY_ATTEMPT = "RECOVERY_ATTEMPT"
 
 
 @dataclass(frozen=True)

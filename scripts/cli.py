@@ -17,18 +17,53 @@ if SKILL_ROOT not in sys.path:
     sys.path.insert(0, SKILL_ROOT)
 
 
-def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "harness":
-        # Forward directly to harness CLI
-        sys.argv.pop(1)
-        from scripts.harness import main as harness_main
-        return harness_main()
+def main(argv: Optional[List[str]] = None) -> int:
+    if argv is not None:
+        sys.argv = ["desktop-reviewer"] + list(argv)
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+        if cmd == "harness":
+            sys.argv.pop(1)
+            from scripts.harness import main as harness_main
+            return harness_main()
+        elif cmd == "specialists":
+            sys.argv.pop(1)
+            from scripts.specialists_cli import main as specialists_main
+            return specialists_main()
+        elif cmd == "recovery":
+            sys.argv.pop(1)
+            from scripts.recovery_cli import main as recovery_main
+            return recovery_main()
+        elif cmd == "diagnostics":
+            sys.argv.pop(1)
+            from scripts.diagnostics import main as diagnostics_main
+            diagnostics_main()
+            return 0
+        elif cmd == "doctor":
+            sys.argv.pop(1)
+            from scripts.doctor import main as doctor_main
+            return doctor_main()
+        elif cmd == "inspect":
+            sys.argv.pop(1)
+            from scripts.desktop_inspect import main as inspect_main
+            return inspect_main()
+        elif cmd == "screenshot":
+            sys.argv.pop(1)
+            from scripts.screenshot import main as screenshot_main
+            return screenshot_main()
+        elif cmd == "trace":
+            sys.argv.pop(1)
+            from scripts.trace import main as trace_main
+            return trace_main()
 
     # Generic help
     print("Desktop WebView Reviewer 2.0 CLI")
     print("Usage: desktop-reviewer <command> [options]")
     print()
     print("Commands:")
+    print("  specialists      Invoke and inspect subordinate specialist subagents (Explorer, Tester, etc.)")
+    print("  diagnostics      Unified diagnostic aggregator, failure correlation, and forensics")
+    print("  recovery         Inspect circuit breaker status, recovery policy, and reliability")
     print("  harness          Manage application-side Reviewer Test Harness (init, inspect, remove, validate-release)")
     print("  doctor           Run diagnostic environment check")
     print("  inspect          Inspect desktop window hierarchy and reality reconciliation")
