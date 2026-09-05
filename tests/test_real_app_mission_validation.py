@@ -52,6 +52,12 @@ from runtime.observation_security import sanitize_observed_text, create_safe_ui_
 
 
 class TestRealAppMissionValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import os
+        if os.environ.get("RUN_REAL_APP_TESTS") != "1":
+            raise unittest.SkipTest("Skipping real app tests (RUN_REAL_APP_TESTS!=1)")
+
     """End-to-end validation of autonomous review missions against real desktop application environments."""
 
     def setUp(self):

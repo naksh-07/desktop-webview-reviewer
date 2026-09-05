@@ -144,12 +144,16 @@ The project includes a first-class agent instruction skill located at:
 
 ### Installation
 ```powershell
-# Using uv (recommended)
-uv sync
-
-# Or pip
-pip install -e .
+# Install via pip
+pip install desktop-webview-reviewer
 ```
+
+### Antigravity-Native Integration (Model B)
+Desktop WebView Reviewer is designed to operate as a native capability within Google Antigravity. By installing the Python package globally (or in your active virtual environment), Antigravity can directly invoke the `desktop-webview-mcp` transport and `desktop-reviewer` CLI. 
+
+1. Install the package via `pip install desktop-webview-reviewer`.
+2. Add the `desktop-webview-reviewer` skill to your `.gemini/config/skills/` directory.
+3. The Antigravity agent will automatically discover and use the globally available CLI to orchestrate review missions without requiring a local source clone.
 
 ### CLI Commands
 ```powershell

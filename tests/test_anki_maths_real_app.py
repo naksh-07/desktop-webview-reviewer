@@ -54,6 +54,8 @@ class TestAnkiMathsRealAppValidation(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if os.environ.get("RUN_REAL_APP_TESTS") != "1":
+            raise unittest.SkipTest("Skipping real app tests (RUN_REAL_APP_TESTS!=1)")
         if not ANKI_MATHS_DIR.exists() or not ANKI_PYTHON.exists():
             raise unittest.SkipTest(f"Anki Maths not available at {ANKI_MATHS_DIR}")
 

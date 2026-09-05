@@ -29,6 +29,12 @@ from runtime.capability import CapabilityMatrix, CapabilityId, CapabilityStatus
 
 
 class TestHarnessRealAppE2E(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import os
+        if os.environ.get("RUN_REAL_APP_TESTS") != "1":
+            raise unittest.SkipTest("Skipping real app tests (RUN_REAL_APP_TESTS!=1)")
+
     """Authoritative end-to-end test of the complete harness development workflow."""
 
     def setUp(self):

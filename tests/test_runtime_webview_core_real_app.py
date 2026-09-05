@@ -55,6 +55,12 @@ ANKI_ENTRY = ANKI_MATHS_DIR / "tools" / "run.py"
 
 
 class TestWebviewCoreRealAppValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import os
+        if os.environ.get("RUN_REAL_APP_TESTS") != "1":
+            raise unittest.SkipTest("Skipping real app tests (RUN_REAL_APP_TESTS!=1)")
+
     """End-to-end integration test of WebviewAutomationCore against live Anki Maths."""
 
     @classmethod

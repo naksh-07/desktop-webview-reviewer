@@ -506,6 +506,88 @@ class TestVerificationEngine(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    # -------------------------------------------------------------------------
+    # 7. Post-Fix Release Certification: has_mutations tests
+    # -------------------------------------------------------------------------
+
+    def test_has_mutations_evaluates_true_on_functional_mutation(self):
+        """Proves that a diff with additions/modifications triggers has_mutations = True (PASS)."""
+        diff_with_mutations = ObservationDiffResult(
+            from_epoch=1,
+            to_epoch=2,
+            added=(DiffItem(kind="ADDED", reference="w1e2", role="link", name="New Link", changes=("element appeared",)),),
+        )
+        
+        # When expect_change is True, the outcome state_change could be NO_EFFECT, 
+        # but if diff has mutations, it should PASS anyway.
+        outcome_no_effect_but_mutated = ActionOutcome(
+            action_id=self.request.action_id,
+            session_id=self.session_id,
+            receipt=self.receipt_dispatched,
+            outcome_status=ActionOutcomeStatus.DISPATCHED,
+            state_change=StateChangeClassification.NO_EFFECT,
+            pre_epoch=1,
+            post_epoch=1, # same epoch to isolate has_mutations
+            post_snapshot=self.pre_snapshot, # same epoch to prevent has_epoch_advance
+            observation_diff=diff_with_mutations,
+            duration_ms=45.0,
+        )
+        
+        verdict, manifest, _ = self.verifier.evaluate_transaction(
+            session_id=self.session_id,
+            action_request=self.request,
+            action_receipt=self.receipt_dispatched,
+            action_outcome=outcome_no_effect_but_mutated,
+            pre_snapshot=self.pre_snapshot,
+            post_snapshot=self.pre_snapshot, # same epoch to prevent has_epoch_advance
+            observation_diff=diff_with_mutations,
+        )
+        
+        self.assertEqual(verdict, VerificationVerdict.PASS)
+        # Verify the claim reason contains the diff_summary
+        state_claim = next((c for c in manifest.claims if c.claim_type == ClaimType.ExpectedStateOccurred), None)
+        self.assertIsNotNone(state_claim)
+        self.assertEqual(state_claim.status, VerificationVerdict.PASS)
+        self.assertIn("1 added", state_claim.reason)
+
+    def test_has_mutations_evaluates_false_on_no_mutation(self):
+        """Proves that a diff with no additions, removals, or modifications triggers has_mutations = False (FAIL expected change)."""
+        diff_no_mutations = ObservationDiffResult(
+            from_epoch=1,
+            to_epoch=2,
+        )
+        
+        # When expect_change is True, and outcome state_change is NO_EFFECT, 
+        # and diff has NO mutations, and epoch didn't advance, it should FAIL.
+        outcome_no_effect = ActionOutcome(
+            action_id=self.request.action_id,
+            session_id=self.session_id,
+            receipt=self.receipt_dispatched,
+            outcome_status=ActionOutcomeStatus.DISPATCHED,
+            state_change=StateChangeClassification.NO_EFFECT,
+            pre_epoch=1,
+            post_epoch=1,
+            post_snapshot=self.pre_snapshot,
+            observation_diff=diff_no_mutations,
+            duration_ms=45.0,
+        )
+        
+        verdict, manifest, _ = self.verifier.evaluate_transaction(
+            session_id=self.session_id,
+            action_request=self.request,
+            action_receipt=self.receipt_dispatched,
+            action_outcome=outcome_no_effect,
+            pre_snapshot=self.pre_snapshot,
+            post_snapshot=self.pre_snapshot, # same epoch to prevent has_epoch_advance
+            observation_diff=diff_no_mutations,
+        )
+        
+        self.assertEqual(verdict, VerificationVerdict.FAIL)
+        
+        state_claim = next((c for c in manifest.claims if c.claim_type == ClaimType.ExpectedStateOccurred), None)
+        self.assertIsNotNone(state_claim)
+        self.assertEqual(state_claim.status, VerificationVerdict.FAIL)
+
 
 if __name__ == "__main__":
     unittest.main()

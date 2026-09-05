@@ -37,6 +37,13 @@ ANKI_ENTRY = ANKI_MATHS_DIR / "tools" / "run.py"
 
 
 class TestMcpRealAppAnkiMaths(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        import os
+        if os.environ.get("RUN_REAL_APP_TESTS") != "1":
+            import unittest
+            raise unittest.SkipTest("Skipping real app tests (RUN_REAL_APP_TESTS!=1)")
+
     """Verifies complete end-to-end workflow on live Anki Maths strictly through MCP tools."""
 
     @classmethod

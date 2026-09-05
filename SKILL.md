@@ -114,27 +114,27 @@ Teardown / Detach Safely
 
 ### Step 0: Doctor Diagnostics
 ```bash
-python scripts/doctor.py [--verbose] [--json]
+desktop-webview-doctor [--verbose] [--json]
 ```
 - Performs instant environment, Win32 forensics engine, core integrity, and engine availability diagnostics.
 
 ### Step 1: Launch Application (or skip if already running)
 ```bash
-python scripts/launch.py <executable_or_script> [app_args...] --engine auto --port 9222
+desktop-webview-launch <executable_or_script> [app_args...] --engine auto --port 9222
 ```
 - Injects engine-appropriate remote debugging flags/variables.
 - Records PID and creates `desktop_ownership.json`.
 
 ### Step 2: Discover and Rank Webview Targets
 ```bash
-python scripts/discover.py --engine auto --port 9222
+desktop-webview-discover --engine auto --port 9222
 ```
 - Queries `http://127.0.0.1:<port>/json/list`.
 - Ranks candidate targets, filters out DevTools/workers, selects primary application page, and writes WebSocket URL to `desktop_ws_url.txt`.
 
 ### Step 3: Hardened Forensic Review & Assertion
 ```bash
-python scripts/review.py --click="#my-button" --assert-selector="#result" --assert-text="Expected" --screenshot="screenshot.png" --evidence="evidence.json"
+desktop-webview-review --click="#my-button" --assert-selector="#result" --assert-text="Expected" --screenshot="screenshot.png" --evidence="evidence.json"
 ```
 - Correlates HWND $\leftrightarrow$ PID $\leftrightarrow$ Process $\leftrightarrow$ Port $\leftrightarrow$ Target.
 - Performs structured actions, before/after assertions, console log capture, and dual screenshot capture with SHA-256 hash.
@@ -142,7 +142,7 @@ python scripts/review.py --click="#my-button" --assert-selector="#result" --asse
 
 ### Step 4: Cleanup & Teardown
 ```bash
-python scripts/stop.py
+desktop-webview-stop
 ```
 - Safely terminates reviewer-owned process tree or detaches harmlessly if externally owned.
 

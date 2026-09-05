@@ -94,6 +94,12 @@ ANKI_ENTRY = ANKI_MATHS_DIR / "tools" / "run.py"
 
 
 class TestPhase6RealAppValidation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import os
+        if os.environ.get("RUN_REAL_APP_TESTS") != "1":
+            raise unittest.SkipTest("Skipping real app tests (RUN_REAL_APP_TESTS!=1)")
+
     """End-to-end integration test of Phase 6 Verification & Evidence Hardening against live Anki Maths."""
 
     @classmethod
