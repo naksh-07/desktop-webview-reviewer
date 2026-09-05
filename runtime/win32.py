@@ -380,6 +380,13 @@ class INPUT(ctypes.Structure):
 
 
 WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+MONITORENUMPROC = ctypes.WINFUNCTYPE(
+    wintypes.BOOL,
+    wintypes.HMONITOR,
+    wintypes.HDC,
+    ctypes.POINTER(RECT),
+    wintypes.LPARAM,
+)
 
 
 
@@ -490,6 +497,14 @@ if sys.platform == "win32":
 
     user32.GetMonitorInfoW.argtypes = [wintypes.HMONITOR, ctypes.POINTER(MONITORINFOEXW)]
     user32.GetMonitorInfoW.restype = wintypes.BOOL
+
+    user32.EnumDisplayMonitors.argtypes = [
+        wintypes.HDC,
+        ctypes.POINTER(RECT),
+        MONITORENUMPROC,
+        wintypes.LPARAM,
+    ]
+    user32.EnumDisplayMonitors.restype = wintypes.BOOL
 
     if hasattr(user32, "GetDpiForWindow"):
         user32.GetDpiForWindow.argtypes = [wintypes.HWND]

@@ -48,6 +48,10 @@ desktop-webview-review = "scripts.review:main"
 desktop-webview-stop = "scripts.stop:main"
 desktop-webview-attach = "scripts.attach:main"
 desktop-webview-mcp = "runtime.mcp.server:main"
+desktop-webview-inspect = "scripts.desktop_inspect:main"
+desktop-webview-screenshot = "scripts.screenshot:main"
+desktop-webview-trace = "scripts.trace:main"
+desktop-webview-diagnostics = "scripts.diagnostics:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

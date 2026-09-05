@@ -5,6 +5,31 @@ All notable changes to the `desktop-webview-reviewer` skill are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-phase10-12] - 2026-09-05
+
+### Highlights: Phase 10–12 — Desktop Eyes, Human-Equivalent Hands, Trace & Observability
+- **Desktop Eyes**:
+  - Implemented 64-bit multi-monitor topology discovery (`EnumDisplayMonitors`, DPI scale, primary monitor, virtual screen rect) exposed via `desktop://displays` and `scripts/diagnostics.py`.
+  - Added full desktop and window screenshot capture with SHA-256 content addressing, element affordance cropping, and DWM window forensics (cloaked, iconic, focus, bounds).
+- **Reality Reconciliation & Truth Hierarchy**:
+  - Implemented multi-plane reconciliation unifying Native Win32/UIA, Chromium DOM/AX, DWM Compositor, and Visual framebuffers into canonical `RealityTarget` and `RealityReconciliationSnapshot`.
+  - Enforced physical primacy: $\text{Physical Desktop Reality} > \text{Compositor Reality} > \text{DOM/Web Reality}$, disqualifying cloaked/minimized/modal-occluded elements from actionability even if DOM claims visibility.
+- **Human-Equivalent Hands**:
+  - Expanded interaction repertoire to cover complete human desktop interactions: `click`, `double_click`, `right_click`, `type`, `key_press`, `keyboard_shortcut`, `hover`, `scroll`, `focus`, `drag`, `drop`, `drag_and_drop`, `select`, `dialog_interaction`, `file_picker`.
+  - Enforced 5-stage action milestone lifecycle (`ACTION_RECEIVED`, `ACTION_DISPATCHED`, `ACTION_COMPLETED`, `STATE_CHANGED`, `EXPECTED_STATE_VERIFIED`), eliminating the Dispatch Fallacy.
+  - Added pre- and post-action visual evidence capture tied to the transaction receipt.
+- **Unified Desktop Trace & Observability**:
+  - Implemented `DesktopTraceEngine` and `BoundedTraceTimeline` with 18 canonical trace event types and universal correlation envelope.
+  - Implemented causal action reconstruction (`get_action_lifecycle`, `query`) and automatic token/secret redaction (`[REDACTED]`).
+  - Forwarded real-time CDP console events and exceptions to the session trace timeline.
+- **MCP & CLI Integration**:
+  - Strictly preserved Invariant D (exactly 12 primary MCP tools).
+  - Added MCP resources: `desktop://displays`, `desktop://sessions/{session_id}/trace`, `desktop://sessions/{session_id}/reality`.
+  - Added operator CLI commands: `scripts/desktop_inspect.py`, `scripts/screenshot.py`, `scripts/trace.py`, `scripts/diagnostics.py`.
+  - Enhanced `scripts/doctor.py` with trace engine, reality reconciler, monitor topology, and win32 forensics health checks.
+- **Validation**:
+  - 429 total tests passed (0 failures, 0 errors, 4 skipped) across unit, integration, Phase 8 adversarial security, Phase 9 contracts, and live Anki Maths and Electron runtimes.
+
 ---
 
 ## [2.0.0-phase9] - 2026-09-05

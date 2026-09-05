@@ -80,6 +80,7 @@ class WebviewAutomationCore:
         native_pid: Optional[int] = None,
         native_hwnd: Optional[int] = None,
         cdp_port: Optional[int] = None,
+        trace_engine: Optional[Any] = None,
     ):
         self.session_id = session_id
         self.transport = transport
@@ -87,6 +88,7 @@ class WebviewAutomationCore:
         self.native_pid = native_pid
         self.native_hwnd = native_hwnd
         self.cdp_port = cdp_port
+        self.trace_engine = trace_engine
 
         # Subsystems
         self.target_manager = CDPTargetManager(transport=self.transport, session_id=self.session_id)
@@ -182,6 +184,17 @@ class WebviewAutomationCore:
             "text": untrusted.sanitized,
             "timestamp": params.get("timestamp"),
         })
+        if getattr(self, "trace_engine", None):
+            try:
+                active_target = self.target_manager.active_target_id if self.target_manager else None
+                self.trace_engine.ingest_console_message(
+                    level=msg_type,
+                    message=untrusted.sanitized,
+                    source="console",
+                    cdp_target_id=active_target,
+                )
+            except Exception as e:
+                logger.debug(f"Failed ingesting console message into trace_engine: {e}")
 
     def _on_exception_event(self, event: Dict[str, Any]) -> None:
         params = event.get("params", {})
@@ -195,6 +208,17 @@ class WebviewAutomationCore:
             "text": untrusted.sanitized,
             "timestamp": details.get("exception", {}).get("timestamp"),
         })
+        if getattr(self, "trace_engine", None):
+            try:
+                active_target = self.target_manager.active_target_id if self.target_manager else None
+                self.trace_engine.ingest_console_message(
+                    level="error",
+                    message=untrusted.sanitized,
+                    source="runtime_exception",
+                    cdp_target_id=active_target,
+                )
+            except Exception as e:
+                logger.debug(f"Failed ingesting exception into trace_engine: {e}")
 
     # -------------------------------------------------------------------------
     # 3. Script Execution Primitives

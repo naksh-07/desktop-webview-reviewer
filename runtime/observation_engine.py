@@ -15,7 +15,8 @@ from runtime.webview_core import WebviewAutomationCore
 from runtime.flaui_bridge import FlaUIBridge
 from runtime.native_observation import NativeObservationExtractor
 from runtime.web_observation import WebObservationExtractor
-from runtime.reconciliation import ContextReconciler
+from runtime.reconciliation import ContextReconciler, RealityReconciler
+from runtime.reality_models import RealityReconciliationSnapshot
 from runtime.observation_compaction import format_observation_yaml
 from runtime.observation_pagination import ObservationPaginator
 from runtime.observation_diff import ObservationDiffer, ObservationDiffResult
@@ -63,12 +64,14 @@ class ObservationEngine:
             )
 
         self.reconciler = ContextReconciler()
+        self.reality_reconciler = RealityReconciler(self.reconciler)
         self.paginator = ObservationPaginator(self.reference_registry)
         self.differ = ObservationDiffer()
 
         # Historical snapshots by epoch: epoch -> DualPerspectiveSnapshot
         self._snapshots: Dict[int, DualPerspectiveSnapshot] = {}
         self._last_snapshot: Optional[DualPerspectiveSnapshot] = None
+        self._last_reality_snapshot: Optional[RealityReconciliationSnapshot] = None
 
     @property
     def current_epoch(self) -> int:
@@ -77,6 +80,10 @@ class ObservationEngine:
     @property
     def last_snapshot(self) -> Optional[DualPerspectiveSnapshot]:
         return self._last_snapshot
+
+    @property
+    def last_reality_snapshot(self) -> Optional[RealityReconciliationSnapshot]:
+        return self._last_reality_snapshot
 
     async def observe(
         self,
@@ -157,9 +164,87 @@ class ObservationEngine:
             is_diff=is_diff_mode,
         )
 
+        # 5. Authoritative Reality Model Reconciliation
+        try:
+            self._last_reality_snapshot = self.reality_reconciler.reconcile_snapshot(
+                session_id=self.session_id,
+                epoch=epoch,
+                native_obs=native_obs,
+                web_obs=web_obs,
+                reference_registry=self.reference_registry,
+            )
+        except Exception as e:
+            logger.warning(f"Reality reconciliation failed: {e}")
+
         self._snapshots[epoch] = snapshot
         self._last_snapshot = snapshot
         return snapshot
+
+    async def observe_reality(
+        self,
+        hwnd: Optional[int] = None,
+        target_id: Optional[str] = None,
+    ) -> RealityReconciliationSnapshot:
+        """
+        Executes an observation pass and returns the authoritative RealityReconciliationSnapshot.
+        """
+        await self.observe(hwnd=hwnd, target_id=target_id)
+        if self._last_reality_snapshot is not None:
+            return self._last_reality_snapshot
+        # Fallback snapshot
+        return RealityReconciliationSnapshot(
+            session_id=self.session_id,
+            observation_epoch=self.current_epoch,
+        )
+
+    async def observe_desktop(
+        self,
+        capture_screenshot: bool = False,
+        output_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Captures the physical desktop environment:
+        virtual screen bounds, multi-monitor topology, active top-level windows,
+        and optional full desktop screenshot.
+        """
+        topology = self.native_supervisor.get_monitor_topology()
+        windows: List[Dict[str, Any]] = []
+        try:
+            hwnds = self.native_supervisor.list_top_level_windows(visible_only=True)
+            for h in hwnds[:30]:
+                try:
+                    insp = self.native_supervisor.inspect_window(h)
+                    windows.append({
+                        "hwnd": hex(h),
+                        "title": insp.title,
+                        "class_name": insp.class_name,
+                        "pid": insp.pid,
+                        "bounds": insp.bounds.to_dict(),
+                        "is_cloaked": insp.is_cloaked,
+                        "is_minimized": insp.is_iconic,
+                    })
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"Error enumerating windows during desktop observation: {e}")
+
+        res: Dict[str, Any] = {
+            "session_id": self.session_id,
+            "timestamp": time.time(),
+            "virtual_screen": topology.virtual_screen.to_dict(),
+            "monitors": [m.to_dict() for m in topology.monitors],
+            "windows": windows,
+        }
+
+        if capture_screenshot:
+            ok, _, sha256_hash, meta = self.native_supervisor.capture_full_desktop_screenshot(output_path=output_path)
+            res["screenshot"] = {
+                "success": ok,
+                "sha256": sha256_hash,
+                "output_path": meta.get("output_path"),
+            }
+
+        return res
 
     def compute_diff(self, from_epoch: int, to_epoch: int) -> Optional[ObservationDiffResult]:
         """Calculates difference between two stored epoch snapshots."""

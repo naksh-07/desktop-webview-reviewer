@@ -36,7 +36,14 @@ from runtime.action_models import (
     ActionOutcomeStatus,
     StateChangeClassification,
     ActionRiskLevel,
+    ActionLifecycleStage,
 )
+from runtime.trace_models import (
+    DesktopTraceEvent,
+    DesktopTraceEventType,
+    TraceCorrelation,
+)
+from runtime.trace_engine import DesktopTraceEngine
 from runtime.errors import (
     StaleReferenceException,
     TargetNotFoundException,
@@ -77,6 +84,7 @@ class ActionExecutionEngine:
         native_executor: Optional[NativeActionExecutor] = None,
         evidence_store: Optional[EvidenceStore] = None,
         verification_engine: Optional[VerificationEngine] = None,
+        trace_engine: Optional[DesktopTraceEngine] = None,
     ):
         self.session_id = session_id
         self.reference_registry: ReferenceRegistry = (
@@ -156,11 +164,72 @@ class ActionExecutionEngine:
         # Verification & Evidence
         self.evidence_store = evidence_store or EvidenceStore()
         self.verification_engine = verification_engine or VerificationEngine(evidence_store=self.evidence_store)
+        self.trace_engine: Optional[DesktopTraceEngine] = trace_engine
 
         self.receipt_history: List[ActionReceipt] = []
         self.outcome_history: List[ActionOutcome] = []
         self.manifest_history: List[EvidenceManifest] = []
         self._lock = asyncio.Lock()
+
+    def _capture_and_store_screenshot(
+        self,
+        action_id: str,
+        epoch: int,
+        label: str,
+        target: Optional[ActionTarget] = None,
+        correlation: Optional[TraceCorrelation] = None,
+    ) -> Optional[str]:
+        """
+        Captures window or desktop screenshot, stores it as an evidence artifact,
+        and emits a SCREENSHOT trace event. Returns artifact_id if saved.
+        """
+        try:
+            png_bytes: Optional[bytes] = None
+            if target and target.native_hwnd:
+                res = self.native_supervisor.capture_window_screenshot(target.native_hwnd)
+                if isinstance(res, tuple):
+                    png_bytes = res[1] if res[0] else None
+                elif isinstance(res, bytes):
+                    png_bytes = res
+            if not png_bytes:
+                res = self.native_supervisor.capture_full_desktop_screenshot()
+                if isinstance(res, tuple):
+                    png_bytes = res[1] if res[0] else None
+                elif isinstance(res, bytes):
+                    png_bytes = res
+
+            if png_bytes and self.evidence_store:
+                rel_path = f"artifacts/screenshots/{label}.png"
+                artifact = self.evidence_store.store_bytes(
+                    session_id=self.session_id,
+                    action_id=action_id,
+                    relative_path=rel_path,
+                    data=png_bytes,
+                    mime_type="image/png",
+                    metadata={
+                        "epoch": epoch,
+                        "label": label,
+                        "plane": target.plane.value if target else TargetPlane.NATIVE.value,
+                        "hwnd": hex(target.native_hwnd) if target and target.native_hwnd else None,
+                    },
+                )
+                if self.trace_engine and correlation:
+                    self.trace_engine.record_event(
+                        event_type=DesktopTraceEventType.SCREENSHOT,
+                        correlation=correlation,
+                        plane=target.plane if target else TargetPlane.NATIVE,
+                        status="CAPTURED",
+                        details={
+                            "label": label,
+                            "sha256": artifact.sha256,
+                            "size_bytes": artifact.size_bytes,
+                        },
+                        artifact_references=[artifact.artifact_id],
+                    )
+                return artifact.artifact_id
+        except Exception as e:
+            logger.debug(f"Screenshot capture/store for {label} skipped: {e}")
+        return None
 
     async def execute(
         self,
@@ -183,9 +252,55 @@ class ActionExecutionEngine:
         async with self._lock:
             cycle_start = time.time()
             pre_epoch = self.reference_registry.current_epoch
+            correlation = TraceCorrelation(
+                session_id=self.session_id,
+                epoch_id=pre_epoch,
+                action_id=request.action_id,
+            )
+
+            # Milestone 1: ACTION_RECEIVED
+            if self.trace_engine:
+                self.trace_engine.record_event(
+                    event_type=DesktopTraceEventType.ACTION_REQUESTED,
+                    correlation=correlation,
+                    plane=TargetPlane.NATIVE,
+                    target_reference=request.reference,
+                    status="RECEIVED",
+                    details={
+                        "stage": ActionLifecycleStage.ACTION_RECEIVED.value,
+                        "action_type": request.action_type.value,
+                        "params": request.params,
+                    },
+                )
 
             # 1. Target Resolution & Stale Recovery
             target, recovered_from = await self._resolve_target(request)
+
+            if self.trace_engine:
+                self.trace_engine.record_event(
+                    event_type=DesktopTraceEventType.TARGET_RESOLVED,
+                    correlation=correlation,
+                    plane=target.plane,
+                    target_reference=target.reference,
+                    native_hwnd=target.native_hwnd,
+                    cdp_target_id=target.cdp_target_id,
+                    status="RESOLVED",
+                    details={
+                        "affordance_point": target.affordance_point,
+                        "role": target.role,
+                        "name": target.name,
+                        "recovered_from": recovered_from,
+                    },
+                )
+
+            # Pre-action Visual Evidence (before action)
+            before_screenshot_id = self._capture_and_store_screenshot(
+                action_id=request.action_id,
+                epoch=pre_epoch,
+                label="before_action",
+                target=target,
+                correlation=correlation,
+            )
 
             # Capture pre-state observation if not already cached
             pre_snapshot = self.observation_engine.last_snapshot
@@ -239,7 +354,6 @@ class ActionExecutionEngine:
 
             # Record recovery provenance if applicable
             if recovered_from:
-                # Update receipt with recovered_from_ref
                 receipt = ActionReceipt(
                     action_id=receipt.action_id,
                     session_id=receipt.session_id,
@@ -264,8 +378,39 @@ class ActionExecutionEngine:
 
             self.receipt_history.append(receipt)
 
+            # Milestone 2: ACTION_DISPATCHED
+            if self.trace_engine:
+                self.trace_engine.record_event(
+                    event_type=DesktopTraceEventType.ACTION_DISPATCHED,
+                    correlation=correlation,
+                    plane=receipt.plane,
+                    target_reference=receipt.reference,
+                    native_hwnd=receipt.native_hwnd,
+                    cdp_target_id=receipt.cdp_target_id,
+                    status=receipt.dispatch_status.value,
+                    duration_ms=receipt.duration_ms,
+                    details={
+                        "stage": ActionLifecycleStage.ACTION_DISPATCHED.value,
+                        "dispatch_method": receipt.dispatch_method.value,
+                        "precondition_summary": receipt.precondition_summary,
+                    },
+                )
+
             # If dispatch was rejected or failed, outcome is immediately returned without settlement or epoch bump
             if receipt.dispatch_status != DispatchStatus.DISPATCHED:
+                failure_screenshot_id = self._capture_and_store_screenshot(
+                    action_id=request.action_id,
+                    epoch=pre_epoch,
+                    label="failure",
+                    target=target,
+                    correlation=correlation,
+                )
+                screenshots_dict: Dict[str, str] = {}
+                if before_screenshot_id:
+                    screenshots_dict["before_action"] = before_screenshot_id
+                if failure_screenshot_id:
+                    screenshots_dict["failure"] = failure_screenshot_id
+
                 outcome_status = (
                     ActionOutcomeStatus.REJECTED
                     if receipt.dispatch_status == DispatchStatus.REJECTED
@@ -282,7 +427,11 @@ class ActionExecutionEngine:
                     post_snapshot=None,
                     observation_diff=None,
                     duration_ms=(time.time() - cycle_start) * 1000.0,
-                    details={"dispatch_error": receipt.error},
+                    details={
+                        "dispatch_error": receipt.error,
+                        "screenshots": screenshots_dict,
+                        "stage": ActionLifecycleStage.ACTION_DISPATCHED.value,
+                    },
                 )
                 if verify and self.verification_engine:
                     try:
@@ -314,6 +463,18 @@ class ActionExecutionEngine:
                             manifest=m,
                         )
                         self.manifest_history.append(m)
+                        if self.trace_engine:
+                            self.trace_engine.record_event(
+                                event_type=DesktopTraceEventType.ASSERTION,
+                                correlation=correlation,
+                                plane=target.plane,
+                                status=v.value,
+                                details={
+                                    "stage": ActionLifecycleStage.EXPECTED_STATE_VERIFIED.value,
+                                    "verdict": v.value,
+                                },
+                                artifact_references=[m.manifest_id],
+                            )
                     except Exception as e:
                         logger.error(f"Verification evaluation failed on rejected dispatch: {e}")
 
@@ -346,10 +507,29 @@ class ActionExecutionEngine:
                 timeout_ms=request.settle_timeout_ms,
             )
 
+            # Milestone 3: ACTION_COMPLETED / ACTION_SETTLED
+            if self.trace_engine:
+                self.trace_engine.record_event(
+                    event_type=DesktopTraceEventType.ACTION_SETTLED,
+                    correlation=correlation,
+                    plane=receipt.plane,
+                    status=settle_res.settlement_type.value,
+                    duration_ms=settle_res.settle_duration_ms,
+                    details={
+                        "stage": ActionLifecycleStage.ACTION_COMPLETED.value,
+                        "settlement": settle_res.to_dict(),
+                    },
+                )
+
             # 5. Post-Action Observation & Observation Differ
             # Advance epoch for mutating interaction
             post_epoch = self.reference_registry.advance_epoch(
                 reason=f"action:{request.action_type.value}:{target.reference}"
+            )
+            post_correlation = TraceCorrelation(
+                session_id=self.session_id,
+                epoch_id=post_epoch,
+                action_id=request.action_id,
             )
 
             post_snapshot = await self.observation_engine.observe(
@@ -393,6 +573,34 @@ class ActionExecutionEngine:
                 else:
                     state_change = StateChangeClassification.NO_EFFECT
 
+            # Milestone 4: STATE_CHANGED / OBSERVATION
+            if self.trace_engine:
+                self.trace_engine.record_event(
+                    event_type=DesktopTraceEventType.OBSERVATION,
+                    correlation=post_correlation,
+                    plane=target.plane,
+                    status=state_change.value,
+                    details={
+                        "stage": ActionLifecycleStage.STATE_CHANGED.value,
+                        "classification": state_change.value,
+                        "diff_summary": diff.to_dict() if diff else None,
+                    },
+                )
+
+            # Post-action Visual Evidence (after action)
+            after_screenshot_id = self._capture_and_store_screenshot(
+                action_id=request.action_id,
+                epoch=post_epoch,
+                label="after_action",
+                target=target,
+                correlation=post_correlation,
+            )
+            screenshots_dict = {}
+            if before_screenshot_id:
+                screenshots_dict["before_action"] = before_screenshot_id
+            if after_screenshot_id:
+                screenshots_dict["after_action"] = after_screenshot_id
+
             total_duration = (time.time() - cycle_start) * 1000.0
 
             outcome = ActionOutcome(
@@ -411,6 +619,8 @@ class ActionExecutionEngine:
                 details={
                     "settlement": settle_res.to_dict(),
                     "diff_summary": diff.to_dict() if diff else None,
+                    "screenshots": screenshots_dict,
+                    "stage": ActionLifecycleStage.STATE_CHANGED.value,
                 },
             )
 
@@ -450,12 +660,30 @@ class ActionExecutionEngine:
                         modal_details=outcome.modal_details,
                         navigation_url=outcome.navigation_url,
                         duration_ms=outcome.duration_ms,
-                        details={**outcome.details, "manifest": m.to_dict()},
+                        details={
+                            **outcome.details,
+                            "manifest": m.to_dict(),
+                            "stage": ActionLifecycleStage.EXPECTED_STATE_VERIFIED.value,
+                        },
                         timestamp=outcome.timestamp,
                         verdict=v.value,
                         manifest=m,
                     )
                     self.manifest_history.append(m)
+
+                    # Milestone 5: EXPECTED_STATE_VERIFIED / ASSERTION
+                    if self.trace_engine:
+                        self.trace_engine.record_event(
+                            event_type=DesktopTraceEventType.ASSERTION,
+                            correlation=post_correlation,
+                            plane=target.plane,
+                            status=v.value,
+                            details={
+                                "stage": ActionLifecycleStage.EXPECTED_STATE_VERIFIED.value,
+                                "verdict": v.value,
+                            },
+                            artifact_references=[m.manifest_id],
+                        )
                 except Exception as e:
                     logger.error(f"Verification evaluation failed: {e}")
 

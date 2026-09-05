@@ -9,13 +9,18 @@ from mcp.server.mcpserver import MCPServer
 
 from runtime.mcp.runtime_bridge import RuntimeBridge
 from runtime.mcp.tools.lifecycle import desktop_launch_impl, desktop_attach_impl
-from runtime.mcp.tools.observation import desktop_inspect_impl
+from runtime.mcp.tools.observation import (
+    desktop_inspect_impl,
+    desktop_screenshot_impl,
+    desktop_get_trace_impl,
+)
 from runtime.mcp.tools.actions import (
     desktop_click_impl,
     desktop_type_impl,
     desktop_press_key_impl,
     desktop_hover_impl,
     desktop_scroll_impl,
+    desktop_drag_drop_impl,
 )
 from runtime.mcp.tools.dialogs import desktop_handle_dialog_impl
 from runtime.mcp.tools.evaluation import desktop_evaluate_impl

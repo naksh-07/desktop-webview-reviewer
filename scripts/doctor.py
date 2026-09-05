@@ -122,6 +122,20 @@ def check_core_subsystems() -> Dict[str, Any]:
         else:
             subsystems["evidence"] = {"status": "PASS", "message": "PNG validation intact"}
 
+        # Phase 10-12 subsystems validation
+        from runtime.trace_engine import DesktopTraceEngine
+        from runtime.reconciliation import RealityReconciler
+        from runtime.native_supervisor import NativeSupervisor
+        trace_eng = DesktopTraceEngine("doctor_test")
+        subsystems["trace_engine"] = {"status": "PASS", "message": "DesktopTraceEngine active and operational"}
+
+        reconciler = RealityReconciler()
+        subsystems["reality_reconciler"] = {"status": "PASS", "message": "RealityReconciler ready (Truth Hierarchy active)"}
+
+        sup = NativeSupervisor()
+        monitors = sup.get_monitor_topology()
+        subsystems["monitor_topology"] = {"status": "PASS", "message": f"{len(monitors)} physical monitor(s) discovered"}
+
         subsystems["forensics"] = {"status": "PASS", "message": "Win32 GUI forensics engine ready"}
         subsystems["imports"] = {"status": "PASS", "message": "All core modules imported successfully"}
     except Exception as e:

@@ -1099,6 +1099,47 @@ class NativeOSSupervisor:
             if hdc_screen:
                 w32.user32.ReleaseDC(0, hdc_screen)
 
+    @classmethod
+    def capture_full_desktop_screenshot(
+        cls,
+        output_path: Optional[str] = None,
+    ) -> Tuple[bool, bytes, str, Dict[str, Any]]:
+        """
+        Captures the complete physical virtual desktop encompassing all active displays.
+        Guarantees GDI DC and bitmap resource cleanup.
+        """
+        v_screen = CoordinateTransformer.get_system_virtual_screen()
+        rect = Rect(x=v_screen.left, y=v_screen.top, width=v_screen.width, height=v_screen.height)
+        success, png_bytes, sha256_hash, meta = cls.capture_desktop_crop(rect, output_path=output_path)
+        if success:
+            meta["is_full_desktop"] = True
+            meta["virtual_screen"] = v_screen.to_dict()
+        return success, png_bytes, sha256_hash, meta
+
+    @classmethod
+    def capture_element_crop(
+        cls,
+        hwnd: Optional[int],
+        element_bounds: Rect,
+        output_path: Optional[str] = None,
+    ) -> Tuple[bool, bytes, str, Dict[str, Any]]:
+        """
+        Captures a pixel-accurate desktop crop around the physical screen coordinates of an element.
+        """
+        if element_bounds.width <= 0 or element_bounds.height <= 0:
+            return False, b"", "", {"error": f"Invalid element crop dimensions: {element_bounds}"}
+        success, png_bytes, sha256_hash, meta = cls.capture_desktop_crop(element_bounds, output_path=output_path)
+        if success:
+            meta["element_bounds"] = element_bounds.to_dict()
+            if hwnd:
+                meta["hwnd"] = hex(hwnd)
+        return success, png_bytes, sha256_hash, meta
+
+    @classmethod
+    def get_monitor_topology(cls):
+        """Discovers the real physical monitor topology and per-monitor DPI scaling."""
+        return CoordinateTransformer.get_system_multimonitor_topology()
+
     @staticmethod
     def _raw_bgra_to_png(bgra_data: bytes, width: int, height: int) -> bytes:
         """Pure Python uncompressed/deflated PNG encoder from 32-bit BGRA buffer."""

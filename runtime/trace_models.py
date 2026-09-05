@@ -20,6 +20,7 @@ _trace_monotonic_counter = itertools.count(1)
 class DesktopTraceEventType(str, Enum):
     """The canonical 17 Desktop Trace event types + harness telemetry markers."""
     APP_LAUNCH = "APP_LAUNCH"
+    APP_ATTACH = "APP_ATTACH"
     WINDOW_DISCOVERED = "WINDOW_DISCOVERED"
     PROCESS_STATE = "PROCESS_STATE"
     WEBVIEW_CONNECTED = "WEBVIEW_CONNECTED"

@@ -58,6 +58,7 @@ class MonitorDescriptor:
             and self.bounds.y <= y < self.bounds.y + self.bounds.height
         )
 
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "monitor_id": self.monitor_id,
@@ -65,6 +66,9 @@ class MonitorDescriptor:
             "is_primary": self.is_primary,
             "dpi_scale": self.dpi_scale,
         }
+
+
+MonitorInfo = MonitorDescriptor
 
 
 @dataclass(frozen=True)
@@ -87,8 +91,29 @@ class MultiMonitorTopology:
                 return m
         return self.monitors[0] if self.monitors else None
 
+    @property
+    def primary(self) -> Optional[MonitorDescriptor]:
+        return self.get_primary_monitor()
+
+    @property
+    def virtual_screen_bounds(self) -> VirtualScreenBounds:
+        return self.virtual_screen
+
+    def __len__(self) -> int:
+        return len(self.monitors)
+
+    def __iter__(self):
+        return iter(self.monitors)
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.to_dict()
+
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "monitor_count": len(self.monitors),
             "monitors": [m.to_dict() for m in self.monitors],
             "virtual_screen": self.virtual_screen.to_dict(),
         }
@@ -128,6 +153,77 @@ class CoordinateTransformer:
                 pass
         # Fallback to standard 1080p primary display
         return VirtualScreenBounds(left=0, top=0, width=1920, height=1080)
+
+    @classmethod
+    def get_system_multimonitor_topology(cls) -> MultiMonitorTopology:
+        """
+        Discovers all active physical display monitors via Win32 EnumDisplayMonitors/GetMonitorInfoW,
+        deriving bounding rectangles, primary status, and Per-Monitor V2 DPI scaling.
+        """
+        virtual_screen = cls.get_system_virtual_screen()
+        monitors: List[MonitorDescriptor] = []
+
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                import runtime.win32 as w32
+                if w32.user32 is not None and hasattr(w32.user32, "EnumDisplayMonitors"):
+                    def _monitor_enum_proc(h_monitor, hdc, lprc, lparam):
+                        try:
+                            info = w32.MONITORINFOEXW()
+                            info.cbSize = ctypes.sizeof(w32.MONITORINFOEXW)
+                            if w32.user32.GetMonitorInfoW(h_monitor, ctypes.byref(info)):
+                                r = info.rcMonitor
+                                bounds = Rect(
+                                    x=r.left,
+                                    y=r.top,
+                                    width=max(0, r.right - r.left),
+                                    height=max(0, r.bottom - r.top),
+                                )
+                                is_primary = bool(info.dwFlags & 1)  # MONITORINFOF_PRIMARY = 1
+                                device_name = str(info.szDevice)
+                                monitor_id = device_name or f"MONITOR_{len(monitors) + 1}"
+
+                                dpi_scale = 1.0
+                                try:
+                                    shcore = getattr(ctypes.windll, "shcore", None)
+                                    if shcore and hasattr(shcore, "GetDpiForMonitor"):
+                                        dpi_x = ctypes.c_uint()
+                                        dpi_y = ctypes.c_uint()
+                                        # MDT_EFFECTIVE_DPI = 0
+                                        if shcore.GetDpiForMonitor(h_monitor, 0, ctypes.byref(dpi_x), ctypes.byref(dpi_y)) == 0:
+                                            dpi_scale = round(dpi_x.value / 96.0, 2)
+                                except Exception:
+                                    pass
+
+                                monitors.append(
+                                    MonitorDescriptor(
+                                        monitor_id=monitor_id,
+                                        bounds=bounds,
+                                        is_primary=is_primary,
+                                        dpi_scale=dpi_scale,
+                                    )
+                                )
+                        except Exception:
+                            pass
+                        return True
+
+                    cb = w32.MONITORENUMPROC(_monitor_enum_proc)
+                    w32.user32.EnumDisplayMonitors(None, None, cb, 0)
+            except Exception:
+                pass
+
+        if not monitors:
+            monitors.append(
+                MonitorDescriptor(
+                    monitor_id="PRIMARY_DISPLAY",
+                    bounds=Rect(x=virtual_screen.left, y=virtual_screen.top, width=virtual_screen.width, height=virtual_screen.height),
+                    is_primary=True,
+                    dpi_scale=1.0,
+                )
+            )
+
+        return MultiMonitorTopology(monitors=monitors, virtual_screen=virtual_screen)
 
     # -------------------------------------------------------------------------
     # 1. Web CSS -> Webview Client Coordinates

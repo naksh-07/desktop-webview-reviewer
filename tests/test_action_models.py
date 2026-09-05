@@ -30,8 +30,12 @@ class TestActionEnums(unittest.TestCase):
     """Validates all action domain enumerations."""
 
     def test_action_type_members(self):
-        expected = {"CLICK", "DOUBLE_CLICK", "RIGHT_CLICK", "TYPE", "KEY_PRESS",
-                     "SCROLL", "FOCUS", "HOVER", "WAIT"}
+        expected = {
+            "CLICK", "DOUBLE_CLICK", "RIGHT_CLICK", "TYPE", "KEY_PRESS",
+            "SCROLL", "FOCUS", "HOVER", "WAIT",
+            "KEYBOARD_SHORTCUT", "DRAG", "DROP", "DRAG_AND_DROP",
+            "SELECT", "DIALOG_INTERACTION", "FILE_PICKER",
+        }
         actual = {e.value for e in ActionType}
         self.assertEqual(actual, expected)
 

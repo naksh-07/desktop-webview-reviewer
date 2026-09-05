@@ -120,13 +120,14 @@ async def desktop_press_key_impl(
     bridge: RuntimeBridge,
     session_id: str,
     key: str,
+    modifiers: Optional[List[str]] = None,
     ref: Optional[str] = None,
     include_snapshot: bool = True,
     timeout_ms: int = 5000,
     action_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Dispatches navigation or shortcut key combinations (e.g. 'Enter', 'Escape', 'Tab', 'Control+A').
+    Dispatches a single virtual key with optional modifiers with focused element verification.
     """
     try:
         clean_sid = SecurityGate.validate_session_id(session_id)
@@ -145,7 +146,7 @@ async def desktop_press_key_impl(
             reference=clean_ref,
             action_type=ActionType.KEY_PRESS,
             observation_epoch=session.current_epoch,
-            params={"key": key},
+            params={"key": key, "modifiers": modifiers or []},
             timeout_ms=timeout_ms,
         )
 
@@ -220,6 +221,51 @@ async def desktop_scroll_impl(
             action_type=ActionType.SCROLL,
             observation_epoch=session.current_epoch,
             params={"direction": direction, "delta_y": delta_y},
+            timeout_ms=timeout_ms,
+        )
+
+        outcome, post_snap, cached = await bridge.execute_action_deduplicated(session, request, include_snapshot=include_snapshot)
+        return _format_action_result(outcome, post_snap, cached=cached)
+    except Exception as e:
+        mcp_err = map_exception_to_mcp_error(e)
+        mcp_err.raise_as_tool_error()
+
+
+async def desktop_drag_drop_impl(
+    bridge: RuntimeBridge,
+    session_id: str,
+    from_ref: str,
+    to_ref: Optional[str] = None,
+    to_x: Optional[int] = None,
+    to_y: Optional[int] = None,
+    include_snapshot: bool = True,
+    timeout_ms: int = 5000,
+    action_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Performs a physical drag-and-drop interaction from source element to destination.
+    """
+    try:
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        clean_from_ref = SecurityGate.validate_ref(from_ref)
+        session = bridge.get_session(clean_sid)
+        act_id = action_id or str(uuid.uuid4())
+
+        params: Dict[str, Any] = {}
+        if to_ref:
+            params["to_ref"] = SecurityGate.validate_ref(to_ref)
+        if to_x is not None:
+            params["to_x"] = int(to_x)
+        if to_y is not None:
+            params["to_y"] = int(to_y)
+
+        request = ActionRequest(
+            action_id=act_id,
+            session_id=clean_sid,
+            reference=clean_from_ref,
+            action_type=ActionType.DRAG_AND_DROP,
+            observation_epoch=session.current_epoch,
+            params=params,
             timeout_ms=timeout_ms,
         )
 

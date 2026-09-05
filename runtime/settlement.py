@@ -38,6 +38,10 @@ class SettlementResult:
     iterations: int
     details: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def settle_duration_ms(self) -> float:
+        return self.elapsed_ms
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "settled": self.settled,

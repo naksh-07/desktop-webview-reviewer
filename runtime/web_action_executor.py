@@ -191,6 +191,38 @@ class WebActionExecutor:
                 key = request.params.get("key", "Enter")
                 modifiers = request.params.get("modifiers", [])
                 await self._dispatch_key_press(key, modifiers)
+            elif action_type == ActionType.KEYBOARD_SHORTCUT:
+                shortcut = request.params.get("shortcut", "")
+                modifiers = request.params.get("modifiers", [])
+                key = request.params.get("key", "")
+                await self._dispatch_keyboard_shortcut(shortcut=shortcut, modifiers=modifiers, key=key)
+            elif action_type in (ActionType.DRAG_AND_DROP, ActionType.DRAG):
+                assert affordance_pt is not None
+                to_x = request.params.get("to_x")
+                to_y = request.params.get("to_y")
+                to_ref = request.params.get("to_ref")
+                if to_x is not None and to_y is not None:
+                    to_pt = (int(to_x), int(to_y))
+                elif to_ref:
+                    target_actionability = await self.actionability_engine.evaluate_actionability(ref_id=to_ref)
+                    to_pt = target_actionability.affordance_point or (affordance_pt[0] + 50, affordance_pt[1] + 50)
+                else:
+                    to_pt = (affordance_pt[0] + int(request.params.get("delta_x", 50)), affordance_pt[1] + int(request.params.get("delta_y", 50)))
+                await self._dispatch_drag_and_drop(from_pt=affordance_pt, to_pt=to_pt)
+            elif action_type == ActionType.DROP:
+                assert affordance_pt is not None
+                await self._dispatch_mouse_up(affordance_pt)
+            elif action_type == ActionType.SELECT:
+                value = request.params.get("value")
+                text = request.params.get("text")
+                await self._dispatch_select(ref_id, value, text, target.frame_id)
+            elif action_type == ActionType.DIALOG_INTERACTION:
+                accept = bool(request.params.get("accept", True))
+                prompt_text = request.params.get("prompt_text")
+                await self._dispatch_dialog(accept, prompt_text)
+            elif action_type == ActionType.FILE_PICKER:
+                files = request.params.get("files", [])
+                await self._dispatch_file_picker(ref_id, files, target.frame_id)
             elif action_type == ActionType.SCROLL:
                 delta_x = int(request.params.get("delta_x", 0))
                 delta_y = int(request.params.get("delta_y", 0))
@@ -432,6 +464,194 @@ class WebActionExecutor:
                 "modifiers": mod_mask,
             },
         )
+
+    async def _dispatch_keyboard_shortcut(
+        self,
+        shortcut: str = "",
+        modifiers: Optional[List[str]] = None,
+        key: str = "",
+    ) -> None:
+        """Dispatches a keyboard shortcut sequence (modifiers down -> key press -> modifiers up)."""
+        mods = list(modifiers or [])
+        target_key = key
+        if shortcut and not target_key:
+            parts = [p.strip() for p in shortcut.replace("+", " ").split()]
+            if parts:
+                target_key = parts[-1]
+                mods.extend(parts[:-1])
+        if not target_key:
+            target_key = "Enter"
+
+        mod_mask = 0
+        for m in mods:
+            m_low = m.lower()
+            if m_low in ("alt", "menu"):
+                mod_mask |= 1
+            elif m_low in ("ctrl", "control"):
+                mod_mask |= 2
+            elif m_low in ("meta", "command", "win"):
+                mod_mask |= 4
+            elif m_low in ("shift",):
+                mod_mask |= 8
+
+        # 1. Modifiers down
+        for m in mods:
+            m_key = "Control" if m.lower() in ("ctrl", "control") else ("Shift" if m.lower() == "shift" else ("Alt" if m.lower() == "alt" else m))
+            await self.webview_core.transport.send_command(
+                method="Input.dispatchKeyEvent",
+                params={"type": "keyDown", "key": m_key, "modifiers": mod_mask},
+            )
+        await asyncio.sleep(0.01)
+
+        # 2. Key press
+        await self.webview_core.transport.send_command(
+            method="Input.dispatchKeyEvent",
+            params={"type": "keyDown", "key": target_key, "modifiers": mod_mask},
+        )
+        await asyncio.sleep(0.01)
+        await self.webview_core.transport.send_command(
+            method="Input.dispatchKeyEvent",
+            params={"type": "keyUp", "key": target_key, "modifiers": mod_mask},
+        )
+        await asyncio.sleep(0.01)
+
+        # 3. Modifiers up (reverse order)
+        for m in reversed(mods):
+            m_key = "Control" if m.lower() in ("ctrl", "control") else ("Shift" if m.lower() == "shift" else ("Alt" if m.lower() == "alt" else m))
+            await self.webview_core.transport.send_command(
+                method="Input.dispatchKeyEvent",
+                params={"type": "keyUp", "key": m_key, "modifiers": 0},
+            )
+
+    async def _dispatch_drag_and_drop(
+        self,
+        from_pt: Tuple[int, int],
+        to_pt: Tuple[int, int],
+        steps: int = 10,
+    ) -> None:
+        """Dispatches smooth mouse drag and drop using CDP Input events."""
+        # 1. Move to start point
+        await self._dispatch_mouse_move(from_pt)
+        await asyncio.sleep(0.02)
+
+        # 2. Mouse Pressed
+        await self.webview_core.transport.send_command(
+            method="Input.dispatchMouseEvent",
+            params={
+                "type": "mousePressed",
+                "x": from_pt[0],
+                "y": from_pt[1],
+                "button": "left",
+                "clickCount": 1,
+            },
+        )
+        await asyncio.sleep(0.02)
+
+        # 3. Interpolated moves with button held
+        x1, y1 = from_pt
+        x2, y2 = to_pt
+        for i in range(1, steps + 1):
+            cur_x = int(x1 + (x2 - x1) * (i / float(steps)))
+            cur_y = int(y1 + (y2 - y1) * (i / float(steps)))
+            await self.webview_core.transport.send_command(
+                method="Input.dispatchMouseEvent",
+                params={
+                    "type": "mouseMoved",
+                    "x": cur_x,
+                    "y": cur_y,
+                    "buttons": 1,
+                },
+            )
+            await asyncio.sleep(0.01)
+
+        # 4. Mouse Released at destination
+        await self.webview_core.transport.send_command(
+            method="Input.dispatchMouseEvent",
+            params={
+                "type": "mouseReleased",
+                "x": x2,
+                "y": y2,
+                "button": "left",
+                "clickCount": 1,
+            },
+        )
+
+    async def _dispatch_mouse_up(self, point: Tuple[int, int]) -> None:
+        """Dispatches mouseReleased at coordinate."""
+        await self.webview_core.transport.send_command(
+            method="Input.dispatchMouseEvent",
+            params={
+                "type": "mouseReleased",
+                "x": point[0],
+                "y": point[1],
+                "button": "left",
+                "clickCount": 1,
+            },
+        )
+
+    async def _dispatch_select(
+        self,
+        ref_id: str,
+        value: Optional[str],
+        text: Optional[str],
+        frame_id: Optional[str],
+    ) -> None:
+        """Selects an option within a HTML select element."""
+        ref = self.reference_registry.resolve_ref(ref_id)
+        target_frame = frame_id or ref.frame_id or self.webview_core.frame_manager.root_frame_id
+        script = f"""
+        (() => {{
+            const refId = {repr(ref_id)};
+            const val = {repr(value)};
+            const txt = {repr(text)};
+            const el = document.querySelector(`[data-ref="${{refId}}"]`) || document.activeElement;
+            if (!el) return {{ success: false, reason: "Element not found" }};
+            if (el.tagName.toLowerCase() === 'select') {{
+                for (let i = 0; i < el.options.length; i++) {{
+                    const opt = el.options[i];
+                    if ((val && opt.value === val) || (txt && opt.text.trim() === txt.trim())) {{
+                        el.selectedIndex = i;
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        return {{ success: true, selectedIndex: i, value: opt.value }};
+                    }}
+                }}
+            }}
+            return {{ success: false, reason: "Option not matched" }};
+        }})()
+        """
+        await self.webview_core.utility_world.evaluate(
+            expression=script,
+            frame_id=target_frame,
+            return_by_value=True,
+        )
+
+    async def _dispatch_dialog(self, accept: bool, prompt_text: Optional[str]) -> None:
+        """Handles JavaScript dialog via CDP Page domain."""
+        params: Dict[str, Any] = {"accept": accept}
+        if prompt_text is not None:
+            params["promptText"] = prompt_text
+        await self.webview_core.transport.send_command(
+            method="Page.handleJavaScriptDialog",
+            params=params,
+        )
+
+    async def _dispatch_file_picker(
+        self,
+        ref_id: str,
+        files: List[str],
+        frame_id: Optional[str],
+    ) -> None:
+        """Sets file input files via CDP DOM.setFileInputFiles or utility world."""
+        ref = self.reference_registry.resolve_ref(ref_id)
+        backend_node_id = getattr(ref, "backend_node_id", None)
+        if backend_node_id:
+            await self.webview_core.transport.send_command(
+                method="DOM.setFileInputFiles",
+                params={"files": files, "backendNodeId": backend_node_id},
+            )
+        else:
+            logger.info(f"File picker requested for {ref_id} with files {files}")
 
     async def _dispatch_scripted_fallback(
         self,

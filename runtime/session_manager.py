@@ -83,11 +83,15 @@ class SessionState:
     flaui_bridge: Optional[Any] = None
     evidence_store: Optional[Any] = None
     verification_engine: Optional[Any] = None
+    trace_engine: Optional[Any] = None
     last_outcome: Optional[Any] = None
     executed_actions: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         self.reference_registry = ReferenceRegistry(session_id=self.session_id)
+        if self.trace_engine is None:
+            from runtime.trace_engine import DesktopTraceEngine
+            self.trace_engine = DesktopTraceEngine(session_id=self.session_id)
 
     @property
     def is_active(self) -> bool:

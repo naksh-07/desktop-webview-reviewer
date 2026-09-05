@@ -257,6 +257,175 @@ class NativeInputDispatcher:
             await asyncio.sleep(self.event_delay_ms / 1000.0)
         return results
 
+    async def double_click(
+        self,
+        screen_x: int,
+        screen_y: int,
+        button: MouseButton = MouseButton.LEFT,
+    ) -> List[DispatchedInputRecord]:
+        """Dispatches a rapid double-click sequence at (screen_x, screen_y)."""
+        return await self.click(screen_x, screen_y, button=button, click_count=2)
+
+    async def right_click(
+        self,
+        screen_x: int,
+        screen_y: int,
+    ) -> List[DispatchedInputRecord]:
+        """Dispatches a context menu right-click at (screen_x, screen_y)."""
+        return await self.click(screen_x, screen_y, button=MouseButton.RIGHT, click_count=1)
+
+    async def hover(
+        self,
+        screen_x: int,
+        screen_y: int,
+        settle_ms: int = 100,
+    ) -> List[DispatchedInputRecord]:
+        """Moves cursor to (screen_x, screen_y) and settles for hover triggers."""
+        rec = await self.move_mouse(screen_x, screen_y)
+        if settle_ms > 0:
+            await asyncio.sleep(settle_ms / 1000.0)
+        return [rec]
+
+    async def drag_and_drop(
+        self,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        steps: int = 10,
+        delay_between_steps_ms: int = 20,
+    ) -> List[DispatchedInputRecord]:
+        """
+        Dispatches smooth mouse drag-and-drop from (start_x, start_y) to (end_x, end_y).
+        Linear interpolation across steps with mouse down held throughout.
+        """
+        results: List[DispatchedInputRecord] = []
+        v_screen = self._resolve_virtual_screen()
+
+        # 1. Move to start position
+        move_start = await self.move_mouse(start_x, start_y)
+        results.append(move_start)
+
+        # 2. Mouse DOWN at start
+        norm_start_x, norm_start_y = CoordinateTransformer.screen_to_sendinput_normalized(
+            start_x, start_y, v_screen
+        )
+        inp_down = w32.INPUT()
+        inp_down.type = w32.INPUT_MOUSE
+        inp_down.mi = w32.MOUSEINPUT(
+            dx=norm_start_x,
+            dy=norm_start_y,
+            mouseData=0,
+            dwFlags=w32.MOUSEEVENTF_LEFTDOWN | w32.MOUSEEVENTF_ABSOLUTE | w32.MOUSEEVENTF_VIRTUALDESK,
+            time=0,
+            dwExtraInfo=0,
+        )
+
+        async with self._lock:
+            err = None
+            success = True
+            if not self.dry_run and sys.platform == "win32" and w32.user32 is not None:
+                try:
+                    sent = w32.user32.SendInput(1, (w32.INPUT * 1)(inp_down), ctypes.sizeof(w32.INPUT))
+                    if sent != 1:
+                        err = f"SendInput drag start failed: sent {sent} of 1"
+                        success = False
+                except Exception as ex:
+                    err = str(ex)
+                    success = False
+            rec_down = DispatchedInputRecord(
+                input_type="MOUSE_DRAG_START",
+                coordinates=(start_x, start_y),
+                normalized_coordinates=(norm_start_x, norm_start_y),
+                button=MouseButton.LEFT.value,
+                success=success,
+                error=err,
+            )
+            self.history.append(rec_down)
+            results.append(rec_down)
+
+        # 3. Intermediate interpolated move steps
+        total_steps = max(1, steps)
+        for i in range(1, total_steps + 1):
+            t = i / total_steps
+            curr_x = round(start_x + (end_x - start_x) * t)
+            curr_y = round(start_y + (end_y - start_y) * t)
+            norm_curr_x, norm_curr_y = CoordinateTransformer.screen_to_sendinput_normalized(
+                curr_x, curr_y, v_screen
+            )
+
+            inp_move = w32.INPUT()
+            inp_move.type = w32.INPUT_MOUSE
+            inp_move.mi = w32.MOUSEINPUT(
+                dx=norm_curr_x,
+                dy=norm_curr_y,
+                mouseData=0,
+                dwFlags=w32.MOUSEEVENTF_MOVE | w32.MOUSEEVENTF_ABSOLUTE | w32.MOUSEEVENTF_VIRTUALDESK,
+                time=0,
+                dwExtraInfo=0,
+            )
+            async with self._lock:
+                err = None
+                success = True
+                if not self.dry_run and sys.platform == "win32" and w32.user32 is not None:
+                    try:
+                        w32.user32.SendInput(1, (w32.INPUT * 1)(inp_move), ctypes.sizeof(w32.INPUT))
+                    except Exception as ex:
+                        err = str(ex)
+                        success = False
+                rec_move = DispatchedInputRecord(
+                    input_type="MOUSE_DRAG_STEP",
+                    coordinates=(curr_x, curr_y),
+                    normalized_coordinates=(norm_curr_x, norm_curr_y),
+                    button=MouseButton.LEFT.value,
+                    success=success,
+                    error=err,
+                )
+                self.history.append(rec_move)
+                results.append(rec_move)
+
+            if delay_between_steps_ms > 0:
+                await asyncio.sleep(delay_between_steps_ms / 1000.0)
+
+        # 4. Mouse UP at destination
+        norm_end_x, norm_end_y = CoordinateTransformer.screen_to_sendinput_normalized(
+            end_x, end_y, v_screen
+        )
+        inp_up = w32.INPUT()
+        inp_up.type = w32.INPUT_MOUSE
+        inp_up.mi = w32.MOUSEINPUT(
+            dx=norm_end_x,
+            dy=norm_end_y,
+            mouseData=0,
+            dwFlags=w32.MOUSEEVENTF_LEFTUP | w32.MOUSEEVENTF_ABSOLUTE | w32.MOUSEEVENTF_VIRTUALDESK,
+            time=0,
+            dwExtraInfo=0,
+        )
+        async with self._lock:
+            err = None
+            success = True
+            if not self.dry_run and sys.platform == "win32" and w32.user32 is not None:
+                try:
+                    sent = w32.user32.SendInput(1, (w32.INPUT * 1)(inp_up), ctypes.sizeof(w32.INPUT))
+                    if sent != 1:
+                        err = f"SendInput drop failed: sent {sent} of 1"
+                        success = False
+                except Exception as ex:
+                    err = str(ex)
+                    success = False
+            rec_up = DispatchedInputRecord(
+                input_type="MOUSE_DROP",
+                coordinates=(end_x, end_y),
+                normalized_coordinates=(norm_end_x, norm_end_y),
+                button=MouseButton.LEFT.value,
+                success=success,
+                error=err,
+            )
+            self.history.append(rec_up)
+            results.append(rec_up)
+
+        return results
+
     async def scroll(
         self,
         screen_x: int,

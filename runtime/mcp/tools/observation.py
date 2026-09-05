@@ -99,3 +99,127 @@ async def desktop_inspect_impl(
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)
         mcp_err.raise_as_tool_error()
+
+
+async def desktop_screenshot_impl(
+    bridge: RuntimeBridge,
+    session_id: str,
+    scope: str = "window",
+    ref: Optional[str] = None,
+    store_evidence: bool = True,
+) -> Dict[str, Any]:
+    """
+    Captures a real visual screenshot of the window, full desktop, or a specific element affordance.
+    Returns SHA-256 content-addressed artifact reference and metadata.
+    """
+    try:
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        session = bridge.get_session(clean_sid)
+        supervisor = session.native_supervisor or NativeSupervisor()
+        target_hwnd = session.target_window.hwnd if session.target_window else None
+
+        png_bytes: Optional[bytes] = None
+        crop_bounds: Optional[Dict[str, int]] = None
+
+        if scope == "element" and ref:
+            clean_ref = SecurityGate.validate_ref(ref)
+            ref_obj = session.reference_registry.resolve_ref(clean_ref)
+            if ref_obj and ref_obj.bounds and ref_obj.bounds.area > 0:
+                crop_bounds = {
+                    "x": int(ref_obj.bounds.x),
+                    "y": int(ref_obj.bounds.y),
+                    "width": int(ref_obj.bounds.width),
+                    "height": int(ref_obj.bounds.height),
+                }
+                res = supervisor.capture_element_crop(hwnd=target_hwnd, element_bounds=ref_obj.bounds)
+                png_bytes = res[1] if isinstance(res, tuple) and res[0] else (res if isinstance(res, bytes) else None)
+        elif scope == "desktop":
+            res = supervisor.capture_full_desktop_screenshot()
+            png_bytes = res[1] if isinstance(res, tuple) and res[0] else (res if isinstance(res, bytes) else None)
+        else:
+            if target_hwnd:
+                res = supervisor.capture_window_screenshot(target_hwnd)
+                png_bytes = res[1] if isinstance(res, tuple) and res[0] else (res if isinstance(res, bytes) else None)
+            if not png_bytes:
+                res = supervisor.capture_full_desktop_screenshot()
+                png_bytes = res[1] if isinstance(res, tuple) and res[0] else (res if isinstance(res, bytes) else None)
+
+        if not png_bytes:
+            return {
+                "session_id": session_id,
+                "success": False,
+                "scope": scope,
+                "error": "Screenshot capture unavailable in current desktop environment",
+            }
+
+        artifact_id = None
+        sha256 = None
+        size_bytes = len(png_bytes)
+
+        if store_evidence and session.evidence_store:
+            import uuid
+            action_id = f"snap_{uuid.uuid4().hex[:8]}"
+            rel_path = f"artifacts/screenshots/{scope}_{action_id}.png"
+            artifact = session.evidence_store.store_bytes(
+                session_id=clean_sid,
+                action_id=action_id,
+                relative_path=rel_path,
+                data=png_bytes,
+                mime_type="image/png",
+                metadata={"scope": scope, "ref": ref, "epoch": session.current_epoch},
+            )
+            artifact_id = artifact.artifact_id
+            sha256 = artifact.sha256
+
+        return {
+            "session_id": session_id,
+            "success": True,
+            "scope": scope,
+            "artifact_id": artifact_id,
+            "sha256": sha256,
+            "size_bytes": size_bytes,
+            "epoch_id": session.current_epoch,
+            "crop_bounds": crop_bounds,
+        }
+    except Exception as e:
+        mcp_err = map_exception_to_mcp_error(e)
+        mcp_err.raise_as_tool_error()
+
+
+async def desktop_get_trace_impl(
+    bridge: RuntimeBridge,
+    session_id: str,
+    action_id: Optional[str] = None,
+    event_type: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """
+    Retrieves the chronological trace timeline of events for a session or action,
+    providing complete causal reconstruction.
+    """
+    try:
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        session = bridge.get_session(clean_sid)
+        trace_engine = getattr(session, "trace_engine", None)
+        if not trace_engine:
+            return {
+                "session_id": session_id,
+                "total_events": 0,
+                "events": [],
+            }
+
+        events = trace_engine.query(
+            action_id=action_id,
+            event_type=event_type,
+            limit=limit,
+        )
+
+        return {
+            "session_id": session_id,
+            "action_id": action_id,
+            "total_events": len(events),
+            "events": [e.to_dict() for e in events],
+        }
+    except Exception as e:
+        mcp_err = map_exception_to_mcp_error(e)
+        mcp_err.raise_as_tool_error()

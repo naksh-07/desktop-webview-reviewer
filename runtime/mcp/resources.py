@@ -69,6 +69,48 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         )
         return snap.text_representation
 
+    # desktop://sessions/{session_id}/trace
+    @server.resource(
+        "desktop://sessions/{session_id}/trace",
+        name="session_trace",
+        description="Unified chronological trace timeline of events for a session.",
+        mime_type="application/json",
+    )
+    async def get_session_trace(session_id: str) -> str:
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        SecurityGate.validate_resource_uri(f"desktop://sessions/{clean_sid}/trace")
+        session = bridge.get_session(clean_sid)
+        if getattr(session, "trace_engine", None):
+            return json.dumps(session.trace_engine.timeline.to_dict(), indent=2)
+        return json.dumps({"total_events": 0, "events": []}, indent=2)
+
+    # desktop://sessions/{session_id}/reality
+    @server.resource(
+        "desktop://sessions/{session_id}/reality",
+        name="session_reality",
+        description="Reconciled multi-plane Reality model targets under the Truth Hierarchy.",
+        mime_type="application/json",
+    )
+    async def get_session_reality(session_id: str) -> str:
+        clean_sid = SecurityGate.validate_session_id(session_id)
+        SecurityGate.validate_resource_uri(f"desktop://sessions/{clean_sid}/reality")
+        session = bridge.get_session(clean_sid)
+        target_hwnd = session.target_window.hwnd if session.target_window else None
+        snap = await session.observation_engine.observe_reality(hwnd=target_hwnd)
+        return json.dumps(snap.to_dict(), indent=2)
+
+    # desktop://displays
+    @server.resource(
+        "desktop://displays",
+        name="displays_topology",
+        description="JSON inventory of physical desktop displays, monitor bounds, and DPI scaling.",
+        mime_type="application/json",
+    )
+    async def get_displays_topology() -> str:
+        supervisor = NativeSupervisor()
+        topology = supervisor.get_monitor_topology()
+        return json.dumps([m.to_dict() for m in topology], indent=2)
+
     # 4. desktop://windows
     @server.resource(
         "desktop://windows",

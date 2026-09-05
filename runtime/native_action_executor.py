@@ -216,6 +216,42 @@ class NativeActionExecutor:
             elif action_type == ActionType.FOCUS:
                 success = await self._ensure_window_focus(hwnd)
                 metadata["focus_acquired"] = success
+            elif action_type == ActionType.KEYBOARD_SHORTCUT:
+                await self._ensure_window_focus(hwnd)
+                key = str(request.params.get("key", ""))
+                modifiers = request.params.get("modifiers", [])
+                records = await self.native_input.press_key(key, modifiers)
+                metadata["dispatched_records"] = [r.to_dict() for r in records]
+            elif action_type in (ActionType.DRAG_AND_DROP, ActionType.DRAG):
+                assert affordance_pt is not None
+                start_x, start_y = affordance_pt
+                end_x = int(request.params.get("to_x", start_x + 100))
+                end_y = int(request.params.get("to_y", start_y + 100))
+                # Resolve destination reference if provided
+                to_ref = request.params.get("to_ref")
+                if to_ref:
+                    try:
+                        resolved_to = self.reference_registry.resolve_ref(to_ref)
+                        end_x, end_y = resolved_to.bounds.center
+                    except Exception:
+                        pass
+                steps = int(request.params.get("steps", 10))
+                records = await self.native_input.drag_and_drop(start_x, start_y, end_x, end_y, steps=steps)
+                metadata["dispatched_records"] = [r.to_dict() for r in records]
+            elif action_type == ActionType.DIALOG_INTERACTION:
+                dialog_action = str(request.params.get("action", "accept")).lower()
+                target_pid = self.native_supervisor.get_window_pid(hwnd) if hwnd else None
+                if target_pid:
+                    modals = self.native_supervisor.scan_modal_dialogs(target_pid)
+                    if modals:
+                        modal_hwnd = modals[0].hwnd
+                        await self._ensure_window_focus(modal_hwnd)
+                        if dialog_action == "accept":
+                            records = await self.native_input.press_key("Enter")
+                        else:
+                            records = await self.native_input.press_key("Escape")
+                        metadata["dispatched_records"] = [r.to_dict() for r in records]
+                        metadata["modal_interacted"] = hex(modal_hwnd)
             elif action_type == ActionType.WAIT:
                 wait_ms = int(request.params.get("duration_ms", 100))
                 await asyncio.sleep(wait_ms / 1000.0)

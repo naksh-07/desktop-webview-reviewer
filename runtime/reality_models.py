@@ -127,10 +127,15 @@ class ActionabilityAssessment:
     reasons: Tuple[str, ...] = field(default_factory=tuple)
     affordance_screen_point: Optional[Tuple[int, int]] = None
 
+    @property
+    def reason(self) -> str:
+        return "; ".join(self.reasons) if self.reasons else ""
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "is_actionable": self.is_actionable,
             "reasons": list(self.reasons),
+            "reason": self.reason,
             "affordance_screen_point": list(self.affordance_screen_point) if self.affordance_screen_point else None,
         }
 
@@ -152,6 +157,24 @@ class RealityTarget:
     truth_rank: TruthHierarchyLevel = TruthHierarchyLevel.PHYSICAL_DESKTOP
     reconciled_at: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def reference(self) -> str:
+        return self.identity.reference
+
+    @property
+    def role(self) -> str:
+        return self.identity.role
+
+    @property
+    def name(self) -> Optional[str]:
+        return self.identity.name
+
+    @property
+    def physical_bounds(self) -> Optional[Rect]:
+        if self.source_plane in (TargetPlane.WEBVIEW, TargetPlane.HYBRID):
+            return self.web.css_bounds
+        return self.native.bounds
 
     @property
     def is_physically_visible(self) -> bool:
@@ -203,6 +226,10 @@ class RealityReconciliationSnapshot:
     targets: List[RealityTarget] = field(default_factory=list)
     contradictions: List[str] = field(default_factory=list)
     timestamp: float = field(default_factory=time.time)
+
+    @property
+    def epoch(self) -> int:
+        return self.observation_epoch
 
     def add_target(self, target: RealityTarget) -> None:
         self.targets.append(target)
