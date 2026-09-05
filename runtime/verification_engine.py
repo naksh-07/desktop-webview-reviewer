@@ -855,6 +855,7 @@ class VerificationEngine:
             )
 
         # Check explicit state changes
+        has_mutations = diff is not None and bool(diff.added or diff.removed or diff.modified)
         has_epoch_advance = (post_snapshot.epoch > pre_snapshot.epoch) if (post_snapshot and pre_snapshot) else (outcome.post_epoch > outcome.pre_epoch if outcome else False)
 
         if expected_effect:
