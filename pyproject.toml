@@ -52,6 +52,8 @@ desktop-webview-inspect = "scripts.desktop_inspect:main"
 desktop-webview-screenshot = "scripts.screenshot:main"
 desktop-webview-trace = "scripts.trace:main"
 desktop-webview-diagnostics = "scripts.diagnostics:main"
+desktop-reviewer = "scripts.cli:main"
+desktop-webview-harness = "scripts.harness:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

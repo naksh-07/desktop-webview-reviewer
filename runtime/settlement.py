@@ -26,6 +26,7 @@ class SettlementType(str, Enum):
     TARGET_DISAPPEARED = "TARGET_DISAPPEARED"
     DOM_MUTATED = "DOM_MUTATED"
     FOCUS_ACQUIRED = "FOCUS_ACQUIRED"
+    HARNESS_SIGNAL = "HARNESS_SIGNAL"
     TIMEOUT = "TIMEOUT"
 
 
@@ -60,12 +61,12 @@ class SettlementEngine:
 
     def __init__(
         self,
-        native_supervisor: NativeSupervisor,
+        native_supervisor: Optional[NativeSupervisor] = None,
         webview_core: Optional[WebviewAutomationCore] = None,
         default_timeout_ms: int = 1500,
         poll_interval_ms: int = 40,
     ):
-        self.native_supervisor = native_supervisor
+        self.native_supervisor = native_supervisor or NativeSupervisor()
         self.webview_core = webview_core
         self.default_timeout_ms = default_timeout_ms
         self.poll_interval_ms = poll_interval_ms
@@ -244,3 +245,43 @@ class SettlementEngine:
             return None
         except Exception:
             return None
+
+    async def wait_for_harness_signal(
+        self,
+        signal_predicate: Callable[[str], bool],
+        harness_service: Any,
+        timeout_ms: int = 5000,
+        poll_interval_ms: int = 50,
+    ) -> SettlementResult:
+        """
+        Waits deterministically for an in-process harness lifecycle signal
+        satisfying the predicate, eliminating arbitrary sleep timeouts.
+        """
+        start = time.time()
+        timeout_sec = timeout_ms / 1000.0
+        interval_sec = poll_interval_ms / 1000.0
+        iterations = 0
+
+        while (time.time() - start) < timeout_sec:
+            iterations += 1
+            if harness_service:
+                matched_signal = harness_service.check_signal(signal_predicate)
+                if matched_signal:
+                    elapsed = (time.time() - start) * 1000.0
+                    return SettlementResult(
+                        settled=True,
+                        settlement_type=SettlementType.HARNESS_SIGNAL,
+                        elapsed_ms=elapsed,
+                        iterations=iterations,
+                        details={"signal": matched_signal},
+                    )
+            await asyncio.sleep(interval_sec)
+
+        elapsed = (time.time() - start) * 1000.0
+        return SettlementResult(
+            settled=False,
+            settlement_type=SettlementType.TIMEOUT,
+            elapsed_ms=elapsed,
+            iterations=iterations,
+            details={"timeout_reached": True},
+        )

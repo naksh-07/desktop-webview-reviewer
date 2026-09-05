@@ -46,8 +46,20 @@ class HarnessFaultType(str, Enum):
 
 class BuildMode(str, Enum):
     """Target binary build classification."""
+    DEV = "DEV"
+    REVIEW = "REVIEW"
+    RELEASE = "RELEASE"
+    # Backward-compatible aliases for Phase 9 test suite
     DEV_OR_REVIEW = "DEV_OR_REVIEW"
     RELEASE_PRODUCTION = "RELEASE_PRODUCTION"
+
+    @property
+    def allows_harness(self) -> bool:
+        return self in (BuildMode.DEV, BuildMode.REVIEW, BuildMode.DEV_OR_REVIEW, "DEV", "REVIEW", "DEV_OR_REVIEW")
+
+    @property
+    def is_release(self) -> bool:
+        return self in (BuildMode.RELEASE, BuildMode.RELEASE_PRODUCTION, "RELEASE", "RELEASE_PRODUCTION")
 
 
 class HarnessSecurityViolationException(Exception):
@@ -107,13 +119,14 @@ class HarnessSecurityValidator:
     """
 
     @staticmethod
-    def validate_harness_access(build_mode: BuildMode) -> bool:
+    def validate_harness_access(build_mode: BuildMode | str) -> bool:
         """
-        Guarantees that harness capabilities cannot be invoked in RELEASE_PRODUCTION mode.
+        Guarantees that harness capabilities cannot be invoked in RELEASE / RELEASE_PRODUCTION mode.
         """
-        if build_mode == BuildMode.RELEASE_PRODUCTION:
+        mode_val = build_mode.value if isinstance(build_mode, BuildMode) else str(build_mode)
+        if mode_val in (BuildMode.RELEASE.value, BuildMode.RELEASE_PRODUCTION.value, "RELEASE", "RELEASE_PRODUCTION"):
             raise HarnessSecurityViolationException(
-                "SECURITY VIOLATION: Reviewer Test Harness is strictly forbidden in RELEASE_PRODUCTION builds. "
+                "SECURITY VIOLATION: Reviewer Test Harness is strictly forbidden in RELEASE / RELEASE_PRODUCTION builds. "
                 "Harness capabilities, test endpoints, and fault injection must be physically stripped from release artifacts."
             )
         return True

@@ -22,12 +22,10 @@ Phase 9 completes the architectural foundation, constitutional sovereignty bound
 * **Specialist Contracts (Doc 27):** Defined boundaries and contracts for future subordinate specialist agents.
 * **Foundational Contracts & Schemas:** Added `runtime/reality_models.py`, `runtime/trace_models.py`, `runtime/harness_contracts.py`, `runtime/specialist_contracts.py`, updated `runtime/capability.py` and `runtime/action_models.py`, and created the comprehensive Phase 9 contract test suite.
 
-### 1.2 Deferred Implementation (Phases 10–14)
-* Full runtime implementation of the Desktop Trace ingestion engine (Phase 10).
-* Multi-source log/console stream merge daemon (Phase 10).
-* Autonomous specialist agent implementations (Phase 11).
-* Client SDK and daemon bridge for Reviewer Test Harness (Phase 12).
-* Advanced multi-frame spatial reconciliation and live cross-framework adapters (Phase 13).
+### 1.2 Milestones Completed (Phases 10–14 / Prompts P2–P3)
+* **Prompt P2 (Phases 10–12):** Desktop Eyes (multi-monitor topology, DWM window forensics), Human-Equivalent Hands (15 interaction types), Reality Reconciliation, Settlement Engine, Desktop Trace Engine, Observability daemon.
+* **Prompt P3 (Phases 13–14):** Reviewer Test Harness Core (wire protocol, local loopback HTTP transport, auth token security), Framework Adapters (Electron, WebView2, Qt), Project Detection & Surgical Injection (`desktop-reviewer harness init/remove`), Build Modes (`DEV`, `REVIEW`, `RELEASE`), and Release Security Validation Gate (`desktop-reviewer harness validate-release`).
+
 
 ### 1.3 Known Limitations
 * **OS Platform:** Deep compositor inspection requires Windows 10/11 DWM (`dwmapi.dll`). Non-Windows platforms cannot enforce physical visibility outranking DOM state.
@@ -81,29 +79,38 @@ Reviewer 2.0 establishes contracts for five subordinate specialist agents. These
 
 ---
 
-## 3. Desktop WebView Reviewer 2.0 Roadmap
+## 3. Desktop WebView Reviewer 2.0 Roadmap & Execution Plan
 
+The project executes according to the **locked Minimum-Prompt Execution Plan**:
+
+```text
+Prompt P1 (Phase 9): Agent Sovereignty, Capability Architecture & Desktop Superpower Specification
+         [COMPLETED & VERIFIED] Architecture Docs 21-27, Reality Model, Contracts & Base Schemas
+   │
+   ▼
+Prompt P2 (Phases 10–12): Desktop Eyes, Human-Equivalent Hands, Trace & Observability
+         [COMPLETED & VERIFIED] DWM Window Forensics, Multi-Monitor Topology, 15 Interaction Types,
+         Reality Reconciliation, Desktop Trace Engine, Observability Daemon (429 tests passing)
+   │
+   ▼
+Prompt P3 (Phases 13–14): Reviewer Harness, Framework Adapters & Dev/Review Build Pipeline
+         [COMPLETED & VERIFIED] In-Process Harness Core, Loopback HTTP Transport, Electron/WV2/Qt Adapters,
+         Project Detection, Surgical Injection (init/remove), Build Modes (DEV/REVIEW/RELEASE),
+         Zero Production Backdoor & Release Security Validation (34 tests passing)
+   │
+   ▼
+Prompt P4 (Phases 15–16): Specialist Subagents, Diagnostics & Recovery/Reliability
+         [PENDING] Explorer, Tester, Reality Inspector, Debugger, Evidence Specialist agents,
+         failure classification, self-healing retries, and bounded reliability loops
+   │
+   ▼
+Prompt P5 (Phases 17–18): Explicit Autonomous Review & Antigravity / TeamPreview Integration
+         [PENDING] Goal-oriented test discovery, autonomous review missions, TeamPreview preview
+         rendering, Adaptive Orchestrator coordination
+   │
+   ▼
+Prompt P6 (Phases 19–20): Real-App Adversarial Certification & Production Release
+         [PENDING] Multi-framework live adversarial certification, end-to-end stress tests,
+         security audit, final 2.0 production release packaging
 ```
-Phase 9: Agent Sovereignty, Capability Architecture & Desktop Superpower Specification
-         [COMPLETED] Architecture Docs 21-27, Foundational Schemas, Contracts & Tests
-   │
-   ▼
-Phase 10: Desktop Trace Engine & Converged Observability
-         Monotonic timeline collector, log stream multiplexer, console capture
-   │
-   ▼
-Phase 11: Specialist Agents Implementation
-         Explorer, Tester, Reality Inspector, Debugger, Evidence Specialist subagents
-   │
-   ▼
-Phase 12: Reviewer Test Harness SDK & Build Tooling
-         In-process dev instrumentation SDK, lifecycle signals, CI release stripper
-   │
-   ▼
-Phase 13: Adversarial Hardening & Cross-Framework Adapters
-         Live verification across Electron, WPF, WinUI 3, Qt, and Evergreen WebView2
-   │
-   ▼
-Phase 14: Desktop WebView Reviewer 2.0 Production Release
-         Final release audit, enterprise compliance validation, public documentation
-```
+

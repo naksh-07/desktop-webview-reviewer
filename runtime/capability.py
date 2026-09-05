@@ -22,6 +22,7 @@ class CapabilityCategory(str, Enum):
     OBSERVATION = "OBSERVATION"
     DIAGNOSTICS = "DIAGNOSTICS"
     EVIDENCE = "EVIDENCE"
+    HARNESS = "HARNESS"
 
 
 class CapabilityStatus(str, Enum):
@@ -76,6 +77,13 @@ class CapabilityId(str, Enum):
     DIAGNOSTICS_DPI = "diagnostics.dpi_metrics"
     DIAGNOSTICS_FORENSICS = "diagnostics.window_forensics"
     EVIDENCE_MANIFEST = "evidence.sha256_manifest"
+
+    # Reviewer Test Harness Capabilities
+    HARNESS_CORE = "harness.core"
+    HARNESS_LIFECYCLE = "harness.lifecycle"
+    HARNESS_DIAGNOSTICS = "harness.diagnostics"
+    HARNESS_FIXTURES = "harness.fixtures"
+    HARNESS_FAULT_INJECTION = "harness.fault_injection"
 
 
 @dataclass
@@ -140,6 +148,11 @@ class CapabilityMatrix:
             (CapabilityId.DIAGNOSTICS_DPI, CapabilityCategory.DIAGNOSTICS),
             (CapabilityId.DIAGNOSTICS_FORENSICS, CapabilityCategory.DIAGNOSTICS),
             (CapabilityId.EVIDENCE_MANIFEST, CapabilityCategory.EVIDENCE),
+            (CapabilityId.HARNESS_CORE, CapabilityCategory.HARNESS),
+            (CapabilityId.HARNESS_LIFECYCLE, CapabilityCategory.HARNESS),
+            (CapabilityId.HARNESS_DIAGNOSTICS, CapabilityCategory.HARNESS),
+            (CapabilityId.HARNESS_FIXTURES, CapabilityCategory.HARNESS),
+            (CapabilityId.HARNESS_FAULT_INJECTION, CapabilityCategory.HARNESS),
         ]
         for cap_id, cat in defaults:
             self._entries[cap_id] = CapabilityEntry(cap_id=cap_id, category=cat)
@@ -267,6 +280,7 @@ class CapabilityMatrix:
                 ("input.", CapabilityCategory.INPUT),
                 ("observation.", CapabilityCategory.OBSERVATION),
                 ("evidence.", CapabilityCategory.EVIDENCE),
+                ("harness.", CapabilityCategory.HARNESS),
             ]:
                 if cap_id.value.startswith(prefix):
                     cat = c

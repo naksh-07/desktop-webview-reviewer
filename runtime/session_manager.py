@@ -84,6 +84,7 @@ class SessionState:
     evidence_store: Optional[Any] = None
     verification_engine: Optional[Any] = None
     trace_engine: Optional[Any] = None
+    harness_service: Optional[Any] = None
     last_outcome: Optional[Any] = None
     executed_actions: Dict[str, Any] = field(default_factory=dict)
 

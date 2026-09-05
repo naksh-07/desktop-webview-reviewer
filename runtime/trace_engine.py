@@ -285,6 +285,37 @@ class DesktopTraceEngine:
             },
         )
 
+    def ingest_harness_event(
+        self,
+        signal_or_telemetry: str,
+        session_id: Optional[str] = None,
+        is_signal: bool = True,
+        epoch_id: Optional[int] = None,
+        action_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        status: str = "SUCCESS",
+    ) -> DesktopTraceEvent:
+        """
+        Ingests in-process Reviewer Test Harness timing signals and diagnostic events.
+        Enforces source='harness', trust_class='diagnostic'.
+        Harness events must never masquerade as PHYSICAL_VERIFICATION or COMPOSITOR_OBSERVATION.
+        """
+        sid = session_id or self.default_session_id
+        safe_details = dict(details or {})
+        safe_details["source"] = "harness"
+        safe_details["trust_class"] = "diagnostic"
+        safe_details["signal"] = str(signal_or_telemetry)
+        event_type = DesktopTraceEventType.HARNESS_SIGNAL if is_signal else DesktopTraceEventType.HARNESS_TELEMETRY
+        return self.emit(
+            event_type=event_type,
+            session_id=sid,
+            epoch_id=epoch_id,
+            action_id=action_id,
+            plane=TargetPlane.NATIVE,
+            status=status,
+            details=safe_details,
+        )
+
     # -------------------------------------------------------------------------
     # Query & Extraction APIs
     # -------------------------------------------------------------------------
