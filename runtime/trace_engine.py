@@ -69,6 +69,9 @@ class BoundedTraceTimeline(TraceTimeline):
     def filter_by_action(self, action_id: str) -> List[DesktopTraceEvent]:
         return [e for e in self._deque if e.correlation.action_id == action_id]
 
+    def filter_by_mission(self, mission_id: str) -> List[DesktopTraceEvent]:
+        return [e for e in self._deque if e.correlation.mission_id == mission_id]
+
     def filter_by_type(self, event_type: DesktopTraceEventType) -> List[DesktopTraceEvent]:
         return [e for e in self._deque if e.event_type == event_type]
 
@@ -175,6 +178,10 @@ class DesktopTraceEngine:
         duration_ms: Optional[float] = None,
         details: Optional[Dict[str, Any]] = None,
         artifact_references: Optional[List[str]] = None,
+        mission_id: Optional[str] = None,
+        plan_id: Optional[str] = None,
+        candidate_id: Optional[str] = None,
+        delegation_id: Optional[str] = None,
     ) -> DesktopTraceEvent:
         """Constructs and records a correlated DesktopTraceEvent."""
         correlation = TraceCorrelation(
@@ -182,6 +189,10 @@ class DesktopTraceEngine:
             epoch_id=epoch_id,
             action_id=action_id,
             request_id=request_id,
+            mission_id=mission_id,
+            plan_id=plan_id,
+            candidate_id=candidate_id,
+            delegation_id=delegation_id,
         )
         safe_details = details or {}
         # Redact any strings in top-level details
@@ -373,6 +384,18 @@ class DesktopTraceEngine:
         """
         timeline = self.get_or_create_timeline(session_id)
         return timeline.filter_by_action(action_id)
+
+    def get_mission_reconstruction(
+        self,
+        session_id: str,
+        mission_id: str,
+    ) -> List[DesktopTraceEvent]:
+        """
+        Returns all trace events causally linked to a mission in monotonic chronological order,
+        enabling full mission -> plan -> candidate -> delegation -> action -> observation -> evidence reconstruction.
+        """
+        timeline = self.get_or_create_timeline(session_id)
+        return timeline.filter_by_mission(mission_id)
 
     def export_json(self, session_id: str) -> str:
         """Exports the entire session timeline to a JSON document."""

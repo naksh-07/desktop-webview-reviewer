@@ -34,7 +34,12 @@ Phase 9 completes the architectural foundation, constitutional sovereignty bound
 * **Bounded Recovery Engine & Reliability:** Implemented `RecoveryEngine` and anti-retry-storm `CircuitBreaker` (`CLOSED`, `OPEN`, `HALF_OPEN`), enforcing "NO BLIND RETRIES", deterministic recovery policies, timeout budget propagation, and failure preservation.
 * **Architecture Invariants Preserved:** Preserved exact 12-primary-tool MCP surface without tool explosion. Added CLI subcommands `specialists`, `recovery`, `diagnostics`. Completed real-app live failure investigation validation and comprehensive test suites (46 new P4 tests, 0 regressions across 94 P1–P3 tests).
 
-### 1.4 Known Limitations
+### 1.4 Milestones Completed in Prompt P5 (Phases 17–18)
+* **Explicit Autonomous Review (Phase 17):** Implemented canonical `ReviewMission` authority envelope with immutable authority digest sealing. Built deterministic 13-point `MissionAdmissionGate` rejecting vague/unspecified scope without crawling. Implemented `GoalOrientedDiscoveryEngine` generating provenance-backed `DiscoveryCandidate`s. Built `ReviewPlanBuilder` and `ReviewMissionOrchestrator` enforcing hard budgets, deterministic lifecycle, physical reality primacy, and graceful cancellation.
+* **Host & Presentation Integrations (Phase 18):** Built decoupled `AntigravityReviewerAdapter` with event streaming and untrusted UI data enveloping. Implemented strictly read-only `TeamPreviewConsumer` enforcing the Zero-Mutation Law.
+* **Architecture Invariants Preserved:** Kept exact 12 primary MCP tools. Added `desktop://missions/active` and `desktop://missions/{mission_id}` MCP resources and `desktop_autonomous_mission` workflow prompt. Added developer CLI `desktop-reviewer mission {validate,run,status,cancel}`. Verified real-app QtWebEngine (Anki Maths) and Electron suites.
+
+### 1.5 Known Limitations
 * **OS Platform:** Deep compositor inspection requires Windows 10/11 DWM (`dwmapi.dll`). Non-Windows platforms cannot enforce physical visibility outranking DOM state.
 * **WebKit Engine:** Legacy WebKit runtimes on Windows lack standard CDP input emulation and operate in `DEGRADED` interaction mode.
 * **Display Sleep:** In remote desktop disconnects or screen suspension, DWM cloaks surfaces; Reviewer correctly marks visual verification as `UNVERIFIED`.
@@ -114,12 +119,12 @@ Prompt P4 (Phases 15–16): Specialist Subagents, Diagnostics & Recovery/Reliabi
    │
    ▼
 Prompt P5 (Phases 17–18): Explicit Autonomous Review & Antigravity / TeamPreview Integration
-         [PENDING] Goal-oriented test discovery, autonomous review missions, TeamPreview preview
-         rendering, Adaptive Orchestrator coordination
+         [COMPLETED & VERIFIED] Goal-oriented test discovery, canonical ReviewMission authority,
+         MissionAdmissionGate, ReviewPlan, ReviewMissionOrchestrator, AntigravityReviewerAdapter,
+         read-only TeamPreviewConsumer, hard budgets & recovery integration (40 tests passing)
    │
    ▼
 Prompt P6 (Phases 19–20): Real-App Adversarial Certification & Production Release
          [PENDING] Multi-framework live adversarial certification, end-to-end stress tests,
          security audit, final 2.0 production release packaging
 ```
-

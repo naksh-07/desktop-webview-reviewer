@@ -26,6 +26,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.argv.pop(1)
             from scripts.harness import main as harness_main
             return harness_main()
+        elif cmd == "mission":
+            sys.argv.pop(1)
+            from scripts.mission_cli import main as mission_main
+            return mission_main()
         elif cmd == "specialists":
             sys.argv.pop(1)
             from scripts.specialists_cli import main as specialists_main
@@ -61,6 +65,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print("Usage: desktop-reviewer <command> [options]")
     print()
     print("Commands:")
+    print("  mission          Autonomous review missions (validate, run, status, cancel)")
     print("  specialists      Invoke and inspect subordinate specialist subagents (Explorer, Tester, etc.)")
     print("  diagnostics      Unified diagnostic aggregator, failure correlation, and forensics")
     print("  recovery         Inspect circuit breaker status, recovery policy, and reliability")

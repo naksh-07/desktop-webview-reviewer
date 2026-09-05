@@ -23,6 +23,7 @@ HOW / VERIFY (Capability Layer)
 4. **Subordinate Specialists Rule**: Specialists (`Explorer`, `Tester`, `RealityInspector`, `Debugger`, `EvidenceSpecialist`) diagnose and execute delegated technical work. They do not decide the mission.
 5. **Bounded Recovery Rule**: Recovery restores testability. Recovery does not redefine the test. No blind retries without prior diagnosis.
 6. **Harness Golden Rule**: The Reviewer Test Harness provides supporting internal diagnostics only. Black-box physical reality validation outranks instrumented telemetry. A harness signal never overrides failed physical reality verification.
+7. **Autonomous Review Mission Rule (Phases 17–18)**: Autonomous review requires an explicit `ReviewMission` authority envelope admitted through the 13-point `MissionAdmissionGate`. Discovery is strictly bounded to declared scope with zero general crawling. Subordinate `ReviewPlan` execution is budget-capped and cancellable. Presentation layers (TeamPreview) are strictly read-only.
 
 ---
 

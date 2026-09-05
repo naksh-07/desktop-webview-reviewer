@@ -151,7 +151,7 @@ class TestSettlementTypeEnum(unittest.TestCase):
 
     def test_all_types_present(self):
         expected = {"STABLE", "NAVIGATED", "MODAL_APPEARED",
-                     "TARGET_DISAPPEARED", "DOM_MUTATED", "FOCUS_ACQUIRED", "TIMEOUT"}
+                     "TARGET_DISAPPEARED", "DOM_MUTATED", "FOCUS_ACQUIRED", "HARNESS_SIGNAL", "TIMEOUT"}
         actual = {e.value for e in SettlementType}
         self.assertEqual(actual, expected)
 

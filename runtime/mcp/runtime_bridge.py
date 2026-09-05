@@ -63,6 +63,8 @@ class RuntimeBridge:
     def __init__(self, daemon: Optional[DesktopDaemon] = None):
         self.daemon = daemon or get_default_daemon()
         self._lock = asyncio.Lock()
+        from runtime.mission_orchestrator import ReviewMissionOrchestrator
+        self.mission_orchestrator = ReviewMissionOrchestrator(session_manager=self.daemon.session_manager)
 
     async def ensure_initialized(self) -> None:
         """Initializes daemon if not already running."""

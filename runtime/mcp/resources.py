@@ -250,3 +250,44 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
             code=McpErrorCode.TARGET_NOT_FOUND,
             message=f"Evidence artifact '{artifact_id}' not found for evidence '{evidence_id}'.",
         )
+
+    # 6. desktop://missions/active
+    @server.resource(
+        "desktop://missions/active",
+        name="active_missions",
+        description="JSON inventory of admitted and active autonomous review missions.",
+        mime_type="application/json",
+    )
+    async def get_active_missions() -> str:
+        orch = getattr(bridge, "mission_orchestrator", None)
+        if not orch:
+            return json.dumps([], indent=2)
+        active = [m.to_dict() for m in orch._active_missions.values()]
+        return json.dumps(active, indent=2)
+
+    # 7. desktop://missions/{mission_id}
+    @server.resource(
+        "desktop://missions/{mission_id}",
+        name="mission_details",
+        description="Detailed review mission authority, execution plan, progress, and result.",
+        mime_type="application/json",
+    )
+    async def get_mission_details(mission_id: str) -> str:
+        orch = getattr(bridge, "mission_orchestrator", None)
+        if not orch:
+            raise McpControlPlaneException(
+                code=McpErrorCode.TARGET_NOT_FOUND,
+                message="Mission orchestrator not initialized.",
+            )
+        mission = orch.get_mission(mission_id)
+        if not mission:
+            raise McpControlPlaneException(
+                code=McpErrorCode.TARGET_NOT_FOUND,
+                message=f"Mission '{mission_id}' not found.",
+            )
+        result = orch.get_mission_result(mission_id)
+        payload = {
+            "mission": mission.to_dict(),
+            "result": result.to_dict() if result else None,
+        }
+        return json.dumps(payload, indent=2)

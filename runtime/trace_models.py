@@ -44,6 +44,10 @@ class DesktopTraceEventType(str, Enum):
     SPECIALIST_LIFECYCLE = "SPECIALIST_LIFECYCLE"
     SPECIALIST_TOOL_AUDIT = "SPECIALIST_TOOL_AUDIT"
     RECOVERY_ATTEMPT = "RECOVERY_ATTEMPT"
+    # Mission & Autonomous Review extensions (Phase 17-18)
+    MISSION_LIFECYCLE = "MISSION_LIFECYCLE"
+    MISSION_DISCOVERY = "MISSION_DISCOVERY"
+    MISSION_PLAN = "MISSION_PLAN"
 
 
 @dataclass(frozen=True)
@@ -53,6 +57,10 @@ class TraceCorrelation:
     epoch_id: Optional[int] = None
     action_id: Optional[str] = None
     request_id: Optional[str] = None
+    mission_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    candidate_id: Optional[str] = None
+    delegation_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -60,6 +68,10 @@ class TraceCorrelation:
             "epoch_id": self.epoch_id,
             "action_id": self.action_id,
             "request_id": self.request_id,
+            "mission_id": self.mission_id,
+            "plan_id": self.plan_id,
+            "candidate_id": self.candidate_id,
+            "delegation_id": self.delegation_id,
         }
 
 

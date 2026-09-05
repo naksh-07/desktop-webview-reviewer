@@ -77,3 +77,28 @@ Execution Plan:
 4. Conclude by calling `desktop_collect_evidence(session_id='{session_id}', test_name='Verification Run', expected_outcome_summary='{expected_outcome}')`.
 5. Check tripartite verdict (PASS, FAIL, UNVERIFIED) and inspect evidence manifest via returned resource URI.
 """
+
+    # 4. desktop_autonomous_mission
+    @server.prompt(
+        name="desktop_autonomous_mission",
+        description="Guides creation and submission of an explicit, bounded ReviewMission authority envelope for autonomous review.",
+    )
+    def desktop_autonomous_mission(session_id: str, objective: str, scope: str, criteria: str) -> str:
+        return f"""# Autonomous Review Mission Authority Guidance
+
+Reviewer operates under the Sovereignty Boundary:
+- Controlling Agent decides WHAT and WHY (Objective, Scope, Acceptance Criteria).
+- Reviewer decides HOW (Discovery, Targeting, Specialists, Settlement, Recovery).
+
+Session ID: {session_id}
+Objective: {objective}
+Declared Scope: {scope}
+Acceptance Criteria: {criteria}
+
+Autonomous Review Protocol:
+1. Submit an explicit ReviewMission via AntigravityReviewerAdapter or CLI `desktop-reviewer mission run <file.json>`.
+2. Admission Gate validates 13 criteria: session, non-empty objective, bounded scope, explicit criteria, hard budgets.
+3. Bounded Discovery enumerates only targets matching the mission scope. General application crawling is rejected.
+4. Reviewer stages Tester, Reality Inspector, and Evidence Specialist under hard action and delegation budgets.
+5. Track mission status via `desktop://missions/{{mission_id}}`.
+"""
