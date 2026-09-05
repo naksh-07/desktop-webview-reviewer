@@ -162,8 +162,17 @@ desktop-reviewer recovery status [--json]
 
 # Query deterministic recovery candidate actions for a failure category
 desktop-reviewer recovery candidates WINDOW_CLOAKED [--json]
-```
+### Step 6: Multi-Framework Certification & Release Validation (Phase 19–20)
+```bash
+# Run multi-framework live adversarial certification matrix across QtWebEngine, Electron, WebView2
+desktop-reviewer certify
 
+# Run 6-domain production security audit (Process, Network, Filesystem, Data, Authority, Release)
+desktop-reviewer security-audit
+
+# Execute deterministic 8-gate production release pipeline
+desktop-reviewer release-validate
+```
 
 ---
 

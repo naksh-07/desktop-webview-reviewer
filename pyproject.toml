@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "desktop-webview-reviewer"
-version = "1.0.0"
+version = "2.0.0"
 description = "Universal desktop application webview testing, inspection, and verification capability."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,10 +54,14 @@ desktop-webview-trace = "scripts.trace:main"
 desktop-webview-diagnostics = "scripts.diagnostics:main"
 desktop-reviewer = "scripts.cli:main"
 desktop-webview-harness = "scripts.harness:main"
+desktop-webview-certify = "scripts.certify:main"
+desktop-webview-security-audit = "scripts.security_audit:main"
+desktop-webview-release-validate = "scripts.release_validator:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["core*", "adapters*", "detectors*", "launchers*", "scripts*", "runtime*"]
+exclude = ["tests*", "fixtures*", "evidence*", "artifacts*", "docs*"]
 
 [tool.pyright]
 venvPath = "."

@@ -1,0 +1,13 @@
+prune tests
+prune fixtures
+prune evidence
+prune artifacts
+prune docs
+prune .venv
+prune .gemini
+recursive-exclude tests *
+recursive-exclude fixtures *
+recursive-exclude evidence *
+recursive-exclude artifacts *
+recursive-exclude docs *
+global-exclude *.pyc __pycache__ *.pyo *.pyd .git*

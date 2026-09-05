@@ -59,6 +59,19 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.argv.pop(1)
             from scripts.trace import main as trace_main
             return trace_main()
+        elif cmd in ("certify", "certification"):
+            sys.argv.pop(1)
+            from scripts.certify import main as certify_main
+            return certify_main()
+        elif cmd in ("security-audit", "audit"):
+            sys.argv.pop(1)
+            from scripts.security_audit import main as audit_main
+            audit_main()
+            return 0
+        elif cmd in ("release-validate", "validate-release", "release"):
+            sys.argv.pop(1)
+            from scripts.release_validator import main as release_main
+            return release_main()
 
     # Generic help
     print("Desktop WebView Reviewer 2.0 CLI")
@@ -69,6 +82,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     print("  specialists      Invoke and inspect subordinate specialist subagents (Explorer, Tester, etc.)")
     print("  diagnostics      Unified diagnostic aggregator, failure correlation, and forensics")
     print("  recovery         Inspect circuit breaker status, recovery policy, and reliability")
+    print("  certify          Multi-framework live adversarial certification matrix")
+    print("  security-audit   Full 6-point repository and runtime security audit")
+    print("  release-validate Deterministic 8-gate production release validation pipeline")
     print("  harness          Manage application-side Reviewer Test Harness (init, inspect, remove, validate-release)")
     print("  doctor           Run diagnostic environment check")
     print("  inspect          Inspect desktop window hierarchy and reality reconciliation")

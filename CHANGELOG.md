@@ -5,6 +5,55 @@ All notable changes to the `desktop-webview-reviewer` skill are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-06
+
+### Highlights: Phase 19–20 — Real-App Adversarial Certification & Production Release
+- **Production Release Candidate Verification**:
+  - Achieved official `PASS` verdict across the deterministic 8-gate release validation pipeline (`scripts/release_validator.py`).
+  - Audited and verified all 6 security domains (`scripts/security_audit.py`): Process, Network, Filesystem, Data, Authority, and Release Security.
+  - Verified package builds (`uv build --out-dir dist`) with zero test fixture, mock, or development harness contamination.
+- **Multi-Framework Live Certification Matrix**:
+  - Live runtime verified on Windows 11 host across QtWebEngine (Anki Maths), Electron, and WebView2.
+  - Generic Chromium/CEF verified at protocol capability level; honest capability attribution applied (`runtime_verified`, `protocol_verified`, `runtime_unavailable`).
+  - Saved machine-readable certification matrix to `evidence/certification/certification_matrix.json`.
+- **Adversarial Hardening**:
+  - Dedicated 28-category adversarial certification test suite (`tests/test_phase19_adversarial_certification.py`) passing with 100% success.
+  - Certified protections against: mission authority mutation, scope expansion, prohibited surface bypass, prompt injection in UI data, specialist privilege escalation, TeamPreview mutation, stale PIDs, ghost CDP endpoints, minimized/cloaked windows, physical occlusion, settlement timeouts, process crash/hang, input failures, recovery exhaustion, circuit breaker retry storms, cancellation races, budget hard exhaustion, and evidence tampering.
+- **Constitutional sovereignty & Invariants Preserved**:
+  - Sovereignty boundary preserved: Antigravity decides WHAT/WHY; Reviewer decides HOW/VERIFY.
+  - Physical Reality Primacy strictly enforced: $\text{Physical Desktop Reality} > \text{Compositor Reality} > \text{DOM/Web Reality}$.
+  - Exactly 12 primary MCP tools preserved without tool count explosion.
+  - Attach-mode process safety guaranteed: externally owned application processes are never terminated upon detachment.
+
+---
+
+## [2.0.0-phase17-18] - 2026-09-05
+
+### Highlights: Phase 17–18 — Autonomous Review Missions & Host Integrations
+- **Autonomous Review Missions**:
+  - Canonical `ReviewMission` authority object with immutable SHA-256 authority digest sealing.
+  - Deterministic 13-point `MissionAdmissionGate` rejecting malformed or unconstrained scopes.
+  - Provenance-backed `GoalOrientedDiscoveryEngine` strictly bound to declared mission scope (zero general crawling).
+  - Subordinate `ReviewPlanBuilder` and `ReviewMissionOrchestrator` enforcing hard action/delegation/recovery budgets.
+- **Host & Presentation Integrations**:
+  - Decoupled `AntigravityReviewerAdapter` streaming events and inert observation envelopes.
+  - Read-only `TeamPreviewConsumer` strictly enforcing the Zero-Mutation Law.
+  - Exposed mission resources (`desktop://missions/active`, `desktop://missions/{mission_id}`) and prompt (`desktop_autonomous_mission`).
+
+---
+
+## [2.0.0-phase15-16] - 2026-09-05
+
+### Highlights: Phase 15–16 — Specialist Subagents, Diagnostics & Bounded Recovery
+- **Specialist Subagent Runtimes**:
+  - Bounded lifecycles for Explorer, Tester, Reality Inspector, Debugger, and Evidence Specialist.
+  - Enforced frozen contract tool gates and immutable audit ledger (`ToolAuditRecord`).
+- **Unified Diagnostics & Bounded Recovery**:
+  - `DiagnosticAggregator` fusing multi-plane evidence into 19 canonical failure classifications.
+  - `RecoveryEngine` and anti-retry-storm `CircuitBreaker` enforcing "NO BLIND RETRIES".
+
+---
+
 ## [2.0.0-phase10-12] - 2026-09-05
 
 ### Highlights: Phase 10–12 — Desktop Eyes, Human-Equivalent Hands, Trace & Observability

@@ -19,7 +19,7 @@ from .assertions import WebviewAssertions, AssertionResult
 from .evidence import EvidenceCollector
 from .cleanup import ProcessCleanup
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "Antigravity Team"
 
 __all__ = [

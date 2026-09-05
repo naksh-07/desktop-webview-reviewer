@@ -1,7 +1,8 @@
 # Desktop WebView Reviewer
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](pyproject.toml)
-[![Status](https://img.shields.io/badge/status-release--ready-green.svg)](docs/release/FINAL_RELEASE_READINESS.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](pyproject.toml)
+[![Verdict](https://img.shields.io/badge/verdict-PASS-brightgreen.svg)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
+[![Status](https://img.shields.io/badge/status-production--released-green.svg)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
 [![Architecture](https://img.shields.io/badge/architecture-Architecture%20H-purple.svg)](docs/architecture/11_FINAL_ARCHITECTURE_DECISION.md)
 [![MCP](https://img.shields.io/badge/mcp-control--plane-orange.svg)](docs/architecture/14_MCP_INTERFACE_SPEC.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -152,6 +153,25 @@ pip install -e .
 
 ### CLI Commands
 ```powershell
+# Production Release Pipeline (8 deterministic gates)
+desktop-reviewer release-validate
+
+# Multi-Framework Live Adversarial Certification
+desktop-reviewer certify
+
+# 6-Domain Production Security Audit
+desktop-reviewer security-audit
+
+# Autonomous Review Missions (Phase 17–18)
+desktop-reviewer mission --help
+
+# Subordinate Specialist Subagents (Phase 15–16)
+desktop-reviewer specialists list
+
+# Diagnostics & Recovery
+desktop-reviewer diagnostics
+desktop-reviewer recovery status
+
 # Self-Test (7/7 deterministic checks)
 desktop-webview-mcp --self-test
 
@@ -167,12 +187,13 @@ desktop-webview-mcp --transport stdio
 ## Release Status & Documentation
 
 For complete documentation:
+- [Final 2.0 Certification & Production Release Report (Doc 31)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
+- [2.0 Architecture Roadmap (Doc 27)](docs/architecture/27_DESKTOP_REVIEWER_2.0_ROADMAP.md)
 - [System Architecture](docs/architecture/12_SYSTEM_ARCHITECTURE.md)
 - [MCP Interface Specification](docs/architecture/14_MCP_INTERFACE_SPEC.md)
 - [Usage Guide](docs/usage/USAGE_GUIDE.md)
 - [Security Model](docs/security/SECURITY.md)
 - [Troubleshooting](docs/troubleshooting/TROUBLESHOOTING.md)
-- [Final Release Readiness Assessment](docs/release/FINAL_RELEASE_READINESS.md)
 
-**Status:** `RELEASE READY WITH DOCUMENTED LIMITATIONS`  
-(Limitations: UIA3 sidecar binary uncompiled by default; WebKit CDP input degraded on Windows).
+**Status:** `2.0.0 PRODUCTION RELEASE CERTIFIED (VERDICT: PASS)`  
+(Limitations: UIA3 sidecar binary uncompiled by default; Windows WebKit lacks standard CDP input; DWM composition requires active display).
