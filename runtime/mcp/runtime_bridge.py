@@ -170,6 +170,8 @@ class RuntimeBridge:
 
             # Action Engine
             if not session.action_engine:
+                if session.trace_engine and session.experience_adapter:
+                    session.trace_engine.register_listener(session.experience_adapter.on_trace_event)
                 session.action_engine = ActionExecutionEngine(
                     session_id=session.session_id,
                     reference_registry=registry,
@@ -180,6 +182,8 @@ class RuntimeBridge:
                     flaui_bridge=flaui,
                     evidence_store=session.evidence_store,
                     verification_engine=session.verification_engine,
+                    trace_engine=session.trace_engine,
+                    experience_adapter=session.experience_adapter,
                 )
 
     async def execute_action_deduplicated(

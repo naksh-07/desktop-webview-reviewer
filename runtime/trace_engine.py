@@ -12,7 +12,7 @@ import logging
 import re
 import time
 import uuid
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Dict, List, Optional, Any, Set, Tuple, Callable
 
 from runtime.state import TargetPlane
 from runtime.trace_models import (
@@ -94,7 +94,12 @@ class DesktopTraceEngine:
     and coordinates application log and console stream multiplexing.
     """
 
-    def __init__(self, session_id: Optional[str] = None, max_events_per_session: int = 5000):
+    def __init__(
+        self,
+        session_id: Optional[str] = None,
+        max_events_per_session: int = 5000,
+        experience_adapter: Optional[Any] = None,
+    ):
         if isinstance(session_id, int):
             max_events_per_session = session_id
             session_id = None
@@ -102,6 +107,20 @@ class DesktopTraceEngine:
         self.max_events_per_session = int(max_events_per_session)
         self._timelines: Dict[str, BoundedTraceTimeline] = {}
         self._global_timeline = BoundedTraceTimeline(max_events=self.max_events_per_session * 2)
+        self._listeners: List[Callable[[DesktopTraceEvent], Any]] = []
+        self.experience_adapter = experience_adapter
+        if experience_adapter is not None:
+            self.register_listener(experience_adapter.on_trace_event)
+
+    def register_listener(self, listener: Callable[[DesktopTraceEvent], Any]) -> None:
+        """Registers a passive callback listener for trace events."""
+        if listener not in self._listeners:
+            self._listeners.append(listener)
+
+    def unregister_listener(self, listener: Callable[[DesktopTraceEvent], Any]) -> None:
+        """Unregisters a passive callback listener."""
+        if listener in self._listeners:
+            self._listeners.remove(listener)
 
     @property
     def timeline(self) -> BoundedTraceTimeline:
@@ -160,6 +179,13 @@ class DesktopTraceEngine:
         session_timeline = self.get_or_create_timeline(session_id)
         session_timeline.record(event)
         self._global_timeline.record(event)
+
+        for listener in list(self._listeners):
+            try:
+                listener(event)
+            except Exception as ex:
+                logger.debug(f"Trace event listener notification skipped: {ex}")
+
         return event
 
     def emit(

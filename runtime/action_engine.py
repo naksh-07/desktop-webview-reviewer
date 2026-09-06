@@ -85,6 +85,7 @@ class ActionExecutionEngine:
         evidence_store: Optional[EvidenceStore] = None,
         verification_engine: Optional[VerificationEngine] = None,
         trace_engine: Optional[DesktopTraceEngine] = None,
+        experience_adapter: Optional[Any] = None,
     ):
         self.session_id = session_id
         self.reference_registry: ReferenceRegistry = (
@@ -165,6 +166,7 @@ class ActionExecutionEngine:
         self.evidence_store = evidence_store or EvidenceStore()
         self.verification_engine = verification_engine or VerificationEngine(evidence_store=self.evidence_store)
         self.trace_engine: Optional[DesktopTraceEngine] = trace_engine
+        self.experience_adapter = experience_adapter
 
         self.receipt_history: List[ActionReceipt] = []
         self.outcome_history: List[ActionOutcome] = []
@@ -213,6 +215,15 @@ class ActionExecutionEngine:
                         "hwnd": hex(target.native_hwnd) if target and target.native_hwnd else None,
                     },
                 )
+                if self.experience_adapter:
+                    try:
+                        self.experience_adapter.on_evidence_created(
+                            session_id=self.session_id,
+                            artifact=artifact,
+                            action_id=action_id,
+                        )
+                    except Exception as ex:
+                        logger.debug(f"Experience evidence recording skipped: {ex}")
                 if self.trace_engine and correlation:
                     self.trace_engine.record_event(
                         event_type=DesktopTraceEventType.SCREENSHOT,
@@ -259,6 +270,12 @@ class ActionExecutionEngine:
             )
 
             # Milestone 1: ACTION_RECEIVED
+            if self.experience_adapter:
+                try:
+                    self.experience_adapter.on_action_requested(self.session_id, request)
+                except Exception as ex:
+                    logger.debug(f"Experience action_requested recording skipped: {ex}")
+
             if self.trace_engine:
                 self.trace_engine.record_event(
                     event_type=DesktopTraceEventType.ACTION_REQUESTED,
@@ -378,6 +395,12 @@ class ActionExecutionEngine:
 
             self.receipt_history.append(receipt)
 
+            if self.experience_adapter:
+                try:
+                    self.experience_adapter.on_action_dispatched(self.session_id, request, receipt)
+                except Exception as ex:
+                    logger.debug(f"Experience action_dispatched recording skipped: {ex}")
+
             # Milestone 2: ACTION_DISPATCHED
             if self.trace_engine:
                 self.trace_engine.record_event(
@@ -477,6 +500,25 @@ class ActionExecutionEngine:
                             )
                     except Exception as e:
                         logger.error(f"Verification evaluation failed on rejected dispatch: {e}")
+
+                if self.experience_adapter:
+                    try:
+                        if outcome.manifest:
+                            self.experience_adapter.on_verification_completed(
+                                self.session_id, outcome.manifest, action_id=request.action_id
+                            )
+                        self.experience_adapter.on_action_settled(self.session_id, request, receipt, outcome)
+                        self.experience_adapter.on_failure_diagnosed(
+                            session_id=self.session_id,
+                            error=receipt.error or f"Dispatch {receipt.dispatch_status.value}",
+                            action_id=request.action_id,
+                            action_request=request,
+                            action_receipt=receipt,
+                            outcome=outcome,
+                            manifest=outcome.manifest,
+                        )
+                    except Exception as ex:
+                        logger.debug(f"Experience action rejected recording skipped: {ex}")
 
                 self.outcome_history.append(outcome)
                 return outcome
@@ -684,8 +726,35 @@ class ActionExecutionEngine:
                             },
                             artifact_references=[m.manifest_id],
                         )
+
+                    if self.experience_adapter and outcome.manifest:
+                        try:
+                            self.experience_adapter.on_verification_completed(
+                                self.session_id, outcome.manifest, action_id=request.action_id
+                            )
+                        except Exception as ex:
+                            logger.debug(f"Experience verification recording skipped: {ex}")
                 except Exception as e:
                     logger.error(f"Verification evaluation failed: {e}")
+
+            if self.experience_adapter:
+                try:
+                    self.experience_adapter.on_action_settled(self.session_id, request, receipt, outcome)
+                    if (
+                        outcome.verdict in ("FAIL", "UNVERIFIED")
+                        or outcome.outcome_status in (ActionOutcomeStatus.FAILED, ActionOutcomeStatus.REJECTED)
+                    ):
+                        self.experience_adapter.on_failure_diagnosed(
+                            session_id=self.session_id,
+                            error=outcome.details.get("dispatch_error") or f"Action completed with verdict: {outcome.verdict}",
+                            action_id=request.action_id,
+                            action_request=request,
+                            action_receipt=receipt,
+                            outcome=outcome,
+                            manifest=outcome.manifest,
+                        )
+                except Exception as ex:
+                    logger.debug(f"Experience post-action recording skipped: {ex}")
 
             self.outcome_history.append(outcome)
             return outcome

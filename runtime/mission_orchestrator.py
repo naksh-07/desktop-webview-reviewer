@@ -62,6 +62,7 @@ class ReviewMissionOrchestrator:
         diagnostic_aggregator: Optional[DiagnosticAggregator] = None,
         admission_gate: Optional[MissionAdmissionGate] = None,
         discovery_engine: Optional[GoalOrientedDiscoveryEngine] = None,
+        experience_adapter: Optional[Any] = None,
     ):
         self.session_manager = session_manager
         self.dispatcher = dispatcher or SpecialistDispatcher(session_manager=session_manager)
@@ -69,6 +70,16 @@ class ReviewMissionOrchestrator:
         self.diagnostic_aggregator = diagnostic_aggregator or DiagnosticAggregator()
         self.admission_gate = admission_gate or MissionAdmissionGate(session_manager=session_manager)
         self.discovery_engine = discovery_engine or GoalOrientedDiscoveryEngine(dispatcher=self.dispatcher)
+        if experience_adapter is not None:
+            self.experience_adapter = experience_adapter
+        elif session_manager and getattr(session_manager, "experience_adapter", None):
+            self.experience_adapter = session_manager.experience_adapter
+        else:
+            try:
+                from runtime.experience.adapter import ExperienceIntegrationAdapter
+                self.experience_adapter = ExperienceIntegrationAdapter.get_default_adapter()
+            except Exception:
+                self.experience_adapter = None
 
         self._active_missions: Dict[str, ReviewMission] = {}
         self._cancellation_requests: Dict[str, str] = {}
@@ -83,6 +94,8 @@ class ReviewMissionOrchestrator:
         result = self.admission_gate.validate(mission, session_state=session_state)
         if result.is_admitted:
             self._active_missions[mission.mission_id] = mission
+            if self.experience_adapter:
+                self.experience_adapter.on_mission_admitted(mission, session_state=session_state)
         return result
 
     def cancel_mission(self, mission_id: str, reason: str = "User requested cancellation") -> bool:
@@ -438,6 +451,8 @@ class ReviewMissionOrchestrator:
             },
         )
         self._mission_results[mission.mission_id] = result
+        if self.experience_adapter:
+            self.experience_adapter.on_mission_completed(mission, result, session_state=session_state)
         logger.info(f"Mission {mission.mission_id} finished in {duration_ms:.1f}ms. Status: {final_status.value}, Verdict: {technical_verdict}")
         return result
 
@@ -487,6 +502,8 @@ class ReviewMissionOrchestrator:
             cancellation_reason=reason,
         )
         self._mission_results[mission.mission_id] = result
+        if self.experience_adapter:
+            self.experience_adapter.on_mission_completed(mission, result)
         return result
 
     def _emit_trace(

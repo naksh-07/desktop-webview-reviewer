@@ -15,15 +15,24 @@ from runtime.experience.models import (
     EvidenceReferenceRecord,
     ExperienceHealthReport,
     ExperienceScope,
+    FailureSignatureSummary,
+    FailureSummaryItem,
     MissionExperienceRecord,
+    NormalizedFailureRecord,
     OutcomeRecord,
     ProvenanceRecord,
     RecordKind,
     RecordSourceType,
+    RecoveryExperienceRecord,
+    RecoveryStatistics,
     ScopeValidationException,
     SessionExperienceRecord,
     TraceReferenceRecord,
+    VerificationDistribution,
     validate_scope_promotion,
+)
+from runtime.experience.normalization import (
+    FailureNormalizer,
 )
 from runtime.experience.privacy import (
     PrivacyEnforcer,
@@ -36,6 +45,10 @@ from runtime.experience.schema import (
 from runtime.experience.store import (
     ExperiencePersistenceException,
     ExperienceStore,
+)
+from runtime.experience.adapter import (
+    ExperienceIntegrationAdapter,
+    SIGNIFICANT_TRACE_EVENTS,
 )
 
 __all__ = [
@@ -52,6 +65,12 @@ __all__ = [
     "TraceReferenceRecord",
     "EvidenceReferenceRecord",
     "OutcomeRecord",
+    "NormalizedFailureRecord",
+    "RecoveryExperienceRecord",
+    "FailureSummaryItem",
+    "FailureSignatureSummary",
+    "RecoveryStatistics",
+    "VerificationDistribution",
     "ExperienceHealthReport",
     "ScopeValidationException",
     "validate_scope_promotion",
@@ -61,4 +80,8 @@ __all__ = [
     "apply_migrations",
     "ExperienceStore",
     "ExperiencePersistenceException",
+    "FailureNormalizer",
+    "ExperienceIntegrationAdapter",
+    "SIGNIFICANT_TRACE_EVENTS",
 ]
+

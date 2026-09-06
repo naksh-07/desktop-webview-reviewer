@@ -251,7 +251,7 @@ def detect_generic_chromium() -> Tuple[str, str]:
 def detect_cef() -> Tuple[str, str]:
     """Checks CEF protocol adapter status and optional cefpython3."""
     try:
-        import cefpython3
+        import cefpython3  # type: ignore[import-untyped, import-not-found]
         return "AVAILABLE", "cefpython3 installed in active Python environment"
     except ImportError:
         return "PROTOCOL ONLY", "Protocol adapter verified; CEF standalone host runtime pending"
@@ -345,8 +345,9 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
             print(f"    path:     {exp_data.get('storage_path')}")
             print(f"    database: {exp_data.get('database_file')}")
             print(f"    schema:   v{exp_data.get('schema_version')}")
-            print(f"    health:   {exp_data.get('health')}")
-            print(f"    records:  {exp_data.get('record_counts')}")
+            recs = exp_data.get('record_counts', {})
+            failures_cnt = recs.get('failures', 0) if 'failures' in recs else recs.get('normalized_failures', 0)
+            print(f"    records:  {sum(recs.values())} total (sessions: {recs.get('sessions', 0)}, failures: {failures_cnt}, recoveries: {recs.get('recovery_attempts', 0)})")
         print("-" * 65)
 
     if overall_ready:

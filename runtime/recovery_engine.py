@@ -169,9 +169,14 @@ class RecoveryEngine:
     Preserves original failure in Trace and Evidence before restoration.
     """
 
-    def __init__(self, circuit_breaker: Optional[CircuitBreaker] = None):
+    def __init__(
+        self,
+        circuit_breaker: Optional[CircuitBreaker] = None,
+        experience_adapter: Optional[Any] = None,
+    ):
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
         self.recovery_history: List[RecoveryAttemptRecord] = []
+        self.experience_adapter = experience_adapter
 
     async def execute_recovery(
         self,
@@ -281,6 +286,18 @@ class RecoveryEngine:
             error=error_msg,
         )
         self.recovery_history.append(record)
+
+        # 7. Historical intelligence: persist recovery record via experience adapter
+        exp_adapter = getattr(session_state, "experience_adapter", None) or self.experience_adapter
+        if exp_adapter:
+            try:
+                exp_adapter.on_recovery_completed(
+                    session_id=session_state.session_id,
+                    recovery_record=record,
+                    action_id=getattr(diagnosis, "action_id", None) or getattr(session_state, "last_action_id", None),
+                )
+            except Exception as e:
+                logger.debug(f"Experience adapter on_recovery_completed skipped: {e}")
 
         # Emit concluding recovery trace event
         if trace_eng:

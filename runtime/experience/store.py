@@ -19,6 +19,7 @@ import logging
 import os
 import sqlite3
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -32,13 +33,19 @@ from runtime.experience.models import (
     ExperienceHealthReport,
     ExperienceScope,
     MissionExperienceRecord,
+    NormalizedFailureRecord,
     OutcomeRecord,
     ProvenanceRecord,
     RecordKind,
     RecordSourceType,
+    RecoveryExperienceRecord,
     ScopeValidationException,
     SessionExperienceRecord,
     TraceReferenceRecord,
+    FailureSummaryItem,
+    FailureSignatureSummary,
+    RecoveryStatistics,
+    VerificationDistribution,
     validate_scope_promotion,
 )
 from runtime.experience.privacy import PrivacyEnforcer, PrivacyViolationException
@@ -200,7 +207,7 @@ class ExperienceStore:
                         record.target_plane,
                         record.runtime_version,
                         record.scope.value if isinstance(record.scope, ExperienceScope) else str(record.scope),
-                        json.dumps(clean_metadata),
+                        json.dumps(clean_metadata, default=str),
                     ),
                 )
                 conn.commit()
@@ -244,7 +251,7 @@ class ExperienceStore:
                         record.created_at,
                         record.completed_at,
                         record.status,
-                        json.dumps(clean_metadata),
+                        json.dumps(clean_metadata, default=str),
                     ),
                 )
                 conn.commit()
@@ -265,32 +272,65 @@ class ExperienceStore:
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    INSERT INTO action_references (
-                        action_id, session_id, action_type, plane, target, status, duration_ms,
-                        source, source_type, kind, confidence, timestamp, iso_timestamp,
-                        evidence_reference, trace_reference, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-                    """,
-                    (
-                        record.action_id,
-                        record.session_id,
-                        record.action_type,
-                        record.plane,
-                        record.target,
-                        record.status,
-                        record.duration_ms,
-                        record.provenance.source,
-                        record.provenance.source_type.value,
-                        record.provenance.kind.value,
-                        record.provenance.confidence,
-                        record.provenance.timestamp,
-                        record.provenance.iso_timestamp,
-                        record.provenance.evidence_reference,
-                        record.provenance.trace_reference,
-                        json.dumps(clean_metadata),
-                    ),
+                    "SELECT id FROM action_references WHERE action_id = ? AND session_id = ? ORDER BY id DESC LIMIT 1;",
+                    (record.action_id, record.session_id),
                 )
+                existing_row = cursor.fetchone()
+                if existing_row:
+                    cursor.execute(
+                        """
+                        UPDATE action_references SET
+                            action_type = ?, plane = ?, target = ?, status = ?, duration_ms = ?,
+                            source = ?, source_type = ?, kind = ?, confidence = ?, timestamp = ?,
+                            iso_timestamp = ?, evidence_reference = ?, trace_reference = ?, metadata_json = ?
+                        WHERE id = ?;
+                        """,
+                        (
+                            record.action_type,
+                            record.plane,
+                            record.target,
+                            record.status,
+                            record.duration_ms,
+                            record.provenance.source,
+                            record.provenance.source_type.value,
+                            record.provenance.kind.value,
+                            record.provenance.confidence,
+                            record.provenance.timestamp,
+                            record.provenance.iso_timestamp,
+                            record.provenance.evidence_reference,
+                            record.provenance.trace_reference,
+                            json.dumps(clean_metadata, default=str),
+                            existing_row["id"],
+                        ),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO action_references (
+                            action_id, session_id, action_type, plane, target, status, duration_ms,
+                            source, source_type, kind, confidence, timestamp, iso_timestamp,
+                            evidence_reference, trace_reference, metadata_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        (
+                            record.action_id,
+                            record.session_id,
+                            record.action_type,
+                            record.plane,
+                            record.target,
+                            record.status,
+                            record.duration_ms,
+                            record.provenance.source,
+                            record.provenance.source_type.value,
+                            record.provenance.kind.value,
+                            record.provenance.confidence,
+                            record.provenance.timestamp,
+                            record.provenance.iso_timestamp,
+                            record.provenance.evidence_reference,
+                            record.provenance.trace_reference,
+                            json.dumps(clean_metadata, default=str),
+                        ),
+                    )
                 conn.commit()
                 self._last_write_iso = datetime.now(timezone.utc).isoformat()
                 return record
@@ -324,7 +364,7 @@ class ExperienceStore:
                         record.provenance.source,
                         record.provenance.timestamp,
                         record.provenance.iso_timestamp,
-                        json.dumps(clean_metadata),
+                        json.dumps(clean_metadata, default=str),
                     ),
                 )
                 conn.commit()
@@ -365,7 +405,7 @@ class ExperienceStore:
                         record.provenance.source,
                         record.provenance.timestamp,
                         record.provenance.iso_timestamp,
-                        json.dumps(clean_metadata),
+                        json.dumps(clean_metadata, default=str),
                     ),
                 )
                 conn.commit()
@@ -378,8 +418,15 @@ class ExperienceStore:
                 return None
 
     def record_outcome(self, record: OutcomeRecord) -> Optional[OutcomeRecord]:
-        """Persists a review outcome / tripartite verdict record."""
+        """Persists a final review outcome record."""
         clean_details = PrivacyEnforcer.check_and_sanitize(record.details, context="outcome.details")
+        prov = record.provenance or ProvenanceRecord(
+            source="VerificationEngine",
+            source_type=RecordSourceType.RUNTIME,
+            session_id=record.session_id,
+            confidence=record.confidence,
+            kind=RecordKind.FACT,
+        )
 
         with self._lock:
             try:
@@ -404,14 +451,14 @@ class ExperienceStore:
                         record.verdict,
                         record.confidence,
                         record.error_category,
-                        record.provenance.source,
-                        record.provenance.source_type.value,
-                        record.provenance.kind.value,
-                        record.provenance.timestamp,
-                        record.provenance.iso_timestamp,
-                        record.provenance.evidence_reference,
-                        record.provenance.trace_reference,
-                        json.dumps(clean_details),
+                        prov.source,
+                        prov.source_type.value,
+                        prov.kind.value,
+                        prov.timestamp,
+                        prov.iso_timestamp,
+                        prov.evidence_reference,
+                        prov.trace_reference,
+                        json.dumps(clean_details, default=str),
                     ),
                 )
                 conn.commit()
@@ -423,9 +470,128 @@ class ExperienceStore:
                     raise ExperiencePersistenceException(f"Failed to record outcome: {e}") from e
                 return None
 
+    def record_failure(self, record: NormalizedFailureRecord) -> Optional[NormalizedFailureRecord]:
+        """Persists a normalized failure record."""
+        clean_context = PrivacyEnforcer.check_and_sanitize(record.safe_context, context="failure.safe_context")
+        prov = record.provenance or ProvenanceRecord(
+            source="FailureNormalizer",
+            source_type=RecordSourceType.RUNTIME,
+            session_id=record.session_id,
+            confidence=record.confidence,
+            kind=RecordKind.FACT,
+        )
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO normalized_failures (
+                        failure_id, session_id, mission_id, action_id, category, original_classification,
+                        signature, confidence, source, source_type, kind, recovery_reference,
+                        trace_reference, evidence_reference, timestamp, iso_timestamp, safe_context_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(failure_id) DO UPDATE SET
+                        category = excluded.category,
+                        original_classification = excluded.original_classification,
+                        signature = excluded.signature,
+                        confidence = excluded.confidence,
+                        recovery_reference = excluded.recovery_reference,
+                        safe_context_json = excluded.safe_context_json;
+                    """,
+                    (
+                        record.failure_id,
+                        record.session_id,
+                        record.mission_id,
+                        record.action_id,
+                        record.category,
+                        record.original_classification,
+                        record.signature,
+                        record.confidence,
+                        prov.source,
+                        prov.source_type.value,
+                        prov.kind.value,
+                        record.recovery_reference,
+                        record.trace_reference,
+                        record.evidence_reference,
+                        prov.timestamp,
+                        prov.iso_timestamp,
+                        json.dumps(clean_context, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record failure %s: %s", record.failure_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record failure: {e}") from e
+                return None
+
+    def record_recovery_attempt(self, record: RecoveryExperienceRecord) -> Optional[RecoveryExperienceRecord]:
+        """Persists a bounded recovery attempt record."""
+        clean_metadata = PrivacyEnforcer.check_and_sanitize(record.metadata, context="recovery.metadata")
+        prov = record.provenance or ProvenanceRecord(
+            source="RecoveryEngine",
+            source_type=RecordSourceType.RUNTIME,
+            session_id=record.session_id,
+            kind=RecordKind.FACT,
+        )
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO recovery_attempts (
+                        recovery_id, session_id, action_id, failure_id, failure_category,
+                        recovery_action, attempt_number, max_attempts, result, duration_ms,
+                        source, source_type, kind, error, evidence_refs_json,
+                        trace_event_id, timestamp, iso_timestamp, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(recovery_id) DO UPDATE SET
+                        result = excluded.result,
+                        duration_ms = excluded.duration_ms,
+                        error = excluded.error,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.recovery_id,
+                        record.session_id,
+                        record.action_id,
+                        record.failure_id,
+                        record.failure_category,
+                        record.recovery_action,
+                        record.attempt_number,
+                        record.max_attempts,
+                        record.result,
+                        record.duration_ms,
+                        prov.source,
+                        prov.source_type.value,
+                        prov.kind.value,
+                        record.error,
+                        json.dumps(record.evidence_refs, default=str),
+                        record.trace_event_id,
+                        record.timestamp,
+                        record.iso_timestamp,
+                        json.dumps(clean_metadata, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record recovery attempt %s: %s", record.recovery_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record recovery attempt: {e}") from e
+                return None
+
     # -------------------------------------------------------------------------
     # Query Operations
     # -------------------------------------------------------------------------
+
 
     def get_session(self, session_id: str) -> Optional[SessionExperienceRecord]:
         """Retrieves a session record by session_id."""
@@ -488,6 +654,43 @@ class ExperienceStore:
                 logger.error("Failed to list sessions: %s", e)
                 return []
 
+    def get_missions(self, session_id: Optional[str] = None) -> List[MissionExperienceRecord]:
+        """Retrieves mission records, optionally filtered by session_id."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                if session_id:
+                    cursor.execute(
+                        "SELECT * FROM missions WHERE session_id = ? ORDER BY created_at ASC;",
+                        (session_id,),
+                    )
+                else:
+                    cursor.execute("SELECT * FROM missions ORDER BY created_at DESC LIMIT 100;")
+                results = []
+                for row in cursor.fetchall():
+                    results.append(
+                        MissionExperienceRecord(
+                            mission_id=row["mission_id"],
+                            session_id=row["session_id"],
+                            project_id=row["project_id"],
+                            goal=row["goal"],
+                            scope=row["scope"],
+                            created_at=row["created_at"],
+                            completed_at=row["completed_at"],
+                            status=row["status"],
+                            metadata=json.loads(row["metadata_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get missions: %s", e)
+                return []
+
+    def get_missions_for_session(self, session_id: str) -> List[MissionExperienceRecord]:
+        """Convenience alias for get_missions(session_id)."""
+        return self.get_missions(session_id=session_id)
+
     def get_action_references(self, session_id: str) -> List[ActionReferenceRecord]:
         """Retrieves action references for a session."""
         with self._lock:
@@ -531,6 +734,52 @@ class ExperienceStore:
                 logger.error("Failed to get action references for %s: %s", session_id, e)
                 return []
 
+    def get_actions(self, session_id: Optional[str] = None) -> List[ActionReferenceRecord]:
+        """Retrieves action references, optionally filtered by session_id."""
+        if session_id:
+            return self.get_action_references(session_id)
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM action_references ORDER BY id DESC LIMIT 100;")
+                vinfo = get_version_info()
+                results = []
+                for row in cursor.fetchall():
+                    prov = ProvenanceRecord(
+                        source=row["source"],
+                        source_type=RecordSourceType(row["source_type"]),
+                        session_id=row["session_id"],
+                        runtime_version=vinfo.product_version,
+                        confidence=float(row["confidence"]),
+                        evidence_reference=row["evidence_reference"],
+                        trace_reference=row["trace_reference"],
+                        kind=RecordKind(row["kind"]),
+                        timestamp=float(row["timestamp"]),
+                        iso_timestamp=row["iso_timestamp"],
+                    )
+                    results.append(
+                        ActionReferenceRecord(
+                            action_id=row["action_id"],
+                            session_id=row["session_id"],
+                            action_type=row["action_type"],
+                            plane=row["plane"],
+                            target=row["target"],
+                            status=row["status"],
+                            duration_ms=row["duration_ms"],
+                            provenance=prov,
+                            metadata=json.loads(row["metadata_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get actions: %s", e)
+                return []
+
+    def get_actions_for_session(self, session_id: str) -> List[ActionReferenceRecord]:
+        """Convenience alias for get_action_references(session_id)."""
+        return self.get_action_references(session_id)
+
     def get_evidence_references(self, session_id: str) -> List[EvidenceReferenceRecord]:
         """Retrieves evidence references for a session."""
         with self._lock:
@@ -571,6 +820,56 @@ class ExperienceStore:
             except Exception as e:
                 logger.error("Failed to get evidence references for %s: %s", session_id, e)
                 return []
+
+    def get_evidence_for_session(self, session_id: str) -> List[EvidenceReferenceRecord]:
+        """Convenience alias for get_evidence_references(session_id)."""
+        return self.get_evidence_references(session_id)
+
+    def get_trace_references(self, session_id: Optional[str] = None) -> List[TraceReferenceRecord]:
+        """Retrieves trace references, optionally filtered by session_id."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                if session_id:
+                    cursor.execute(
+                        "SELECT * FROM trace_references WHERE session_id = ? ORDER BY sequence_monotonic ASC;",
+                        (session_id,),
+                    )
+                else:
+                    cursor.execute("SELECT * FROM trace_references ORDER BY id DESC LIMIT 100;")
+                vinfo = get_version_info()
+                results = []
+                for row in cursor.fetchall():
+                    prov = ProvenanceRecord(
+                        source=row["source"],
+                        source_type=RecordSourceType.TRACE_ENGINE,
+                        session_id=row["session_id"],
+                        runtime_version=vinfo.product_version,
+                        trace_reference=row["event_id"],
+                        kind=RecordKind.FACT,
+                        timestamp=float(row["timestamp"]),
+                        iso_timestamp=row["iso_timestamp"],
+                    )
+                    results.append(
+                        TraceReferenceRecord(
+                            event_id=row["event_id"],
+                            session_id=row["session_id"],
+                            sequence_monotonic=row["sequence_monotonic"],
+                            event_type=row["event_type"],
+                            plane=row["plane"],
+                            provenance=prov,
+                            metadata=json.loads(row["metadata_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get trace references: %s", e)
+                return []
+
+    def get_traces_for_session(self, session_id: str) -> List[TraceReferenceRecord]:
+        """Convenience alias for get_trace_references(session_id)."""
+        return self.get_trace_references(session_id=session_id)
 
     def get_outcomes(self, session_id: Optional[str] = None) -> List[OutcomeRecord]:
         """Retrieves review outcomes, optionally filtered by session_id."""
@@ -617,6 +916,413 @@ class ExperienceStore:
                 logger.error("Failed to get outcomes: %s", e)
                 return []
 
+    def get_outcomes_for_session(self, session_id: str) -> List[OutcomeRecord]:
+        """Convenience alias for get_outcomes(session_id)."""
+        return self.get_outcomes(session_id=session_id)
+
+    def get_failures(
+        self,
+        session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        category: Optional[str] = None,
+        signature: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[NormalizedFailureRecord]:
+        """Retrieves normalized failure records matching filter criteria."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT f.* FROM normalized_failures f"
+                params: List[Any] = []
+                clauses: List[str] = []
+
+                if project_id:
+                    query += " JOIN review_sessions s ON f.session_id = s.session_id"
+                    clauses.append("s.project_id = ?")
+                    params.append(project_id)
+
+                if session_id:
+                    clauses.append("f.session_id = ?")
+                    params.append(session_id)
+
+                if category:
+                    clauses.append("f.category = ?")
+                    params.append(category)
+
+                if signature:
+                    clauses.append("f.signature = ?")
+                    params.append(signature)
+
+                if clauses:
+                    query += " WHERE " + " AND ".join(clauses)
+
+                query += " ORDER BY f.timestamp DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, tuple(params))
+                vinfo = get_version_info()
+                results: List[NormalizedFailureRecord] = []
+                for row in cursor.fetchall():
+                    prov = ProvenanceRecord(
+                        source=row["source"],
+                        source_type=RecordSourceType(row["source_type"]),
+                        session_id=row["session_id"],
+                        mission_id=row["mission_id"],
+                        runtime_version=vinfo.product_version,
+                        confidence=float(row["confidence"]),
+                        evidence_reference=row["evidence_reference"],
+                        trace_reference=row["trace_reference"],
+                        kind=RecordKind(row["kind"]),
+                        timestamp=float(row["timestamp"]),
+                        iso_timestamp=row["iso_timestamp"],
+                    )
+                    results.append(
+                        NormalizedFailureRecord(
+                            failure_id=row["failure_id"],
+                            session_id=row["session_id"],
+                            category=row["category"],
+                            original_classification=row["original_classification"],
+                            signature=row["signature"],
+                            confidence=float(row["confidence"]),
+                            provenance=prov,
+                            mission_id=row["mission_id"],
+                            action_id=row["action_id"],
+                            recovery_reference=row["recovery_reference"],
+                            trace_reference=row["trace_reference"],
+                            evidence_reference=row["evidence_reference"],
+                            safe_context=json.loads(row["safe_context_json"] or "{}"),
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get failures: %s", e)
+                return []
+
+    def get_failure_category_counts(self, project_id: Optional[str] = None) -> List[FailureSummaryItem]:
+        """Returns frequency of failures grouped by category, optionally filtered by project_id."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                if project_id:
+                    cursor.execute(
+                        """
+                        SELECT f.category, COUNT(*) as cnt
+                        FROM normalized_failures f
+                        JOIN review_sessions s ON f.session_id = s.session_id
+                        WHERE s.project_id = ?
+                        GROUP BY f.category
+                        ORDER BY cnt DESC;
+                        """,
+                        (project_id,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT category, COUNT(*) as cnt
+                        FROM normalized_failures
+                        GROUP BY category
+                        ORDER BY cnt DESC;
+                        """
+                    )
+                return [
+                    FailureSummaryItem(category=row["category"], count=row["cnt"])
+                    for row in cursor.fetchall()
+                ]
+            except Exception as e:
+                logger.error("Failed to get failure category counts: %s", e)
+                return []
+
+    def get_failure_signature_counts(self, limit: int = 20) -> List[FailureSignatureSummary]:
+        """Returns frequency of recurring failures grouped by deterministic failure signature."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT signature, category, COUNT(*) as count, MAX(iso_timestamp) as latest_timestamp, MIN(session_id) as sample_session
+                    FROM normalized_failures
+                    GROUP BY signature
+                    ORDER BY count DESC
+                    LIMIT ?;
+                    """,
+                    (limit,),
+                )
+                return [
+                    FailureSignatureSummary(
+                        signature=row["signature"],
+                        count=row["count"],
+                        category=row["category"],
+                        latest_timestamp=row["latest_timestamp"],
+                        sample_session=row["sample_session"],
+                    )
+                    for row in cursor.fetchall()
+                ]
+            except Exception as e:
+                logger.error("Failed to get failure signature counts: %s", e)
+                return []
+
+    def get_recovery_attempts(
+        self,
+        session_id: Optional[str] = None,
+        category: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[RecoveryExperienceRecord]:
+        """Retrieves recovery attempt records matching filter criteria."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM recovery_attempts"
+                params: List[Any] = []
+                clauses: List[str] = []
+
+                if session_id:
+                    clauses.append("session_id = ?")
+                    params.append(session_id)
+
+                if category:
+                    clauses.append("failure_category = ?")
+                    params.append(category)
+
+                if clauses:
+                    query += " WHERE " + " AND ".join(clauses)
+
+                query += " ORDER BY timestamp DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, tuple(params))
+                vinfo = get_version_info()
+                results: List[RecoveryExperienceRecord] = []
+                for row in cursor.fetchall():
+                    prov = ProvenanceRecord(
+                        source=row["source"],
+                        source_type=RecordSourceType(row["source_type"]),
+                        session_id=row["session_id"],
+                        runtime_version=vinfo.product_version,
+                        kind=RecordKind(row["kind"]),
+                        timestamp=float(row["timestamp"]),
+                        iso_timestamp=row["iso_timestamp"],
+                    )
+                    results.append(
+                        RecoveryExperienceRecord(
+                            recovery_id=row["recovery_id"],
+                            session_id=row["session_id"],
+                            failure_category=row["failure_category"],
+                            recovery_action=row["recovery_action"],
+                            attempt_number=row["attempt_number"],
+                            max_attempts=row["max_attempts"],
+                            result=row["result"],
+                            duration_ms=row["duration_ms"],
+                            provenance=prov,
+                            action_id=row["action_id"],
+                            failure_id=row["failure_id"],
+                            error=row["error"],
+                            evidence_refs=json.loads(row["evidence_refs_json"] or "[]"),
+                            trace_event_id=row["trace_event_id"],
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                            metadata=json.loads(row["metadata_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get recovery attempts: %s", e)
+                return []
+
+    def get_recovery_statistics(self, category: Optional[Any] = None) -> RecoveryStatistics:
+        """Computes aggregate recovery success rates and outcome distributions."""
+        cat_str = getattr(category, "value", str(category)) if category is not None else None
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                where_clause = "WHERE failure_category = ?" if cat_str else ""
+                params = (cat_str,) if cat_str else ()
+
+                cursor.execute(
+                    f"""
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN result = 'SUCCESS' THEN 1 ELSE 0 END) as successful,
+                        SUM(CASE WHEN result = 'FAILED' THEN 1 ELSE 0 END) as failed,
+                        SUM(CASE WHEN result = 'BLOCKED' THEN 1 ELSE 0 END) as blocked,
+                        SUM(CASE WHEN result = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled,
+                        AVG(duration_ms) as mean_duration
+                    FROM recovery_attempts
+                    {where_clause};
+                    """,
+                    params,
+                )
+                row = cursor.fetchone()
+                total = (row["total"] or 0) if row else 0
+                successful = (row["successful"] or 0) if row else 0
+                failed = (row["failed"] or 0) if row else 0
+                blocked = (row["blocked"] or 0) if row else 0
+                cancelled = (row["cancelled"] or 0) if row else 0
+                mean_duration = (row["mean_duration"] or 0.0) if row else 0.0
+                rate = round(successful / total, 3) if total > 0 else 0.0
+
+                # Per-category breakdown
+                cursor.execute(
+                    """
+                    SELECT
+                        failure_category,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN result = 'SUCCESS' THEN 1 ELSE 0 END) as successful
+                    FROM recovery_attempts
+                    GROUP BY failure_category;
+                    """
+                )
+                by_cat: Dict[str, Dict[str, Any]] = {}
+                for r in cursor.fetchall():
+                    c_tot = r["total"]
+                    c_succ = r["successful"] or 0
+                    by_cat[r["failure_category"]] = {
+                        "total": c_tot,
+                        "successful": c_succ,
+                        "success_rate": round(c_succ / c_tot, 3) if c_tot > 0 else 0.0,
+                    }
+
+                return RecoveryStatistics(
+                    category=cat_str or "ALL",
+                    attempt_count=total,
+                    success_count=successful,
+                    failed_count=failed,
+                    blocked_count=blocked,
+                    success_rate=rate,
+                    mean_duration_ms=mean_duration,
+                    total_attempts=total,
+                    successful_attempts=successful,
+                    failed_attempts=failed,
+                    blocked_attempts=blocked,
+                    overall_success_rate=rate,
+                    by_category=by_cat,
+                )
+            except Exception as e:
+                logger.error("Failed to get recovery statistics: %s", e)
+                return RecoveryStatistics(category=cat_str or "ALL")
+
+    def get_verification_distribution(
+        self, category: Optional[str] = None, session_id: Optional[str] = None
+    ) -> VerificationDistribution:
+        """Computes PASS / FAIL / UNVERIFIED distribution across outcomes."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                clauses: List[str] = []
+                params: List[Any] = []
+                if category:
+                    clauses.append("error_category = ?")
+                    params.append(category)
+                if session_id:
+                    clauses.append("session_id = ?")
+                    params.append(session_id)
+                where_clause = "WHERE " + " AND ".join(clauses) if clauses else ""
+
+                cursor.execute(
+                    f"""
+                    SELECT verdict, COUNT(*) as cnt
+                    FROM experience_outcomes
+                    {where_clause}
+                    GROUP BY verdict;
+                    """,
+                    tuple(params),
+                )
+                dist = {"PASS": 0, "FAIL": 0, "UNVERIFIED": 0}
+                total = 0
+                for r in cursor.fetchall():
+                    v = r["verdict"]
+                    c = r["cnt"]
+                    dist[v] = c
+                    total += c
+                return VerificationDistribution(
+                    pass_count=dist["PASS"],
+                    fail_count=dist["FAIL"],
+                    unverified_count=dist["UNVERIFIED"],
+                    total_outcomes=total,
+                )
+            except Exception as e:
+                logger.error("Failed to get verification distribution: %s", e)
+                return VerificationDistribution()
+
+    def get_recent_failure_trend(
+        self,
+        category: Optional[str] = None,
+        days: int = 7,
+        time_window_seconds: Optional[float] = None,
+    ) -> Dict[str, int]:
+        """Computes failure trend counts grouped by category over the recent timeframe."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                clauses: List[str] = []
+                params: List[Any] = []
+                if time_window_seconds is not None:
+                    min_ts = time.time() - time_window_seconds
+                    clauses.append("timestamp >= ?")
+                    params.append(min_ts)
+                else:
+                    min_ts = time.time() - (days * 86400)
+                    clauses.append("timestamp >= ?")
+                    params.append(min_ts)
+
+                if category:
+                    clauses.append("category = ?")
+                    params.append(category)
+
+                where_clause = "WHERE " + " AND ".join(clauses) if clauses else ""
+                cursor.execute(
+                    f"""
+                    SELECT category, COUNT(*) as cnt
+                    FROM normalized_failures
+                    {where_clause}
+                    GROUP BY category
+                    ORDER BY cnt DESC;
+                    """,
+                    tuple(params),
+                )
+                return {r["category"]: r["cnt"] for r in cursor.fetchall()}
+            except Exception as e:
+                logger.error("Failed to get recent failure trend: %s", e)
+                return {}
+
+    def get_failures_by_action_type(self, action_type: Optional[str] = None) -> List[FailureSummaryItem]:
+        """Computes failure frequency grouped by action type."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT safe_context_json, action_id FROM normalized_failures;")
+                rows = cursor.fetchall()
+                counts: Dict[str, int] = {}
+                for r in rows:
+                    act_type = None
+                    if r["safe_context_json"]:
+                        try:
+                            ctx = json.loads(r["safe_context_json"])
+                            act_type = ctx.get("action_type")
+                        except Exception:
+                            pass
+                    if not act_type:
+                        act_type = "UNKNOWN"
+                    if action_type is None or act_type == action_type:
+                        counts[act_type] = counts.get(act_type, 0) + 1
+
+                return [
+                    FailureSummaryItem(category=atype, count=cnt)
+                    for atype, cnt in sorted(counts.items(), key=lambda x: x[1], reverse=True)
+                ]
+            except Exception as e:
+                logger.error("Failed to get failures by action type: %s", e)
+                return []
+
     def get_record_counts(self) -> Dict[str, int]:
         """Returns row counts across all experience tables."""
         counts = {
@@ -626,6 +1332,8 @@ class ExperienceStore:
             "trace_references": 0,
             "evidence_references": 0,
             "outcomes": 0,
+            "failures": 0,
+            "recovery_attempts": 0,
         }
         with self._lock:
             try:
@@ -638,6 +1346,8 @@ class ExperienceStore:
                     ("trace_references", "trace_references"),
                     ("evidence_references", "evidence_references"),
                     ("experience_outcomes", "outcomes"),
+                    ("normalized_failures", "failures"),
+                    ("recovery_attempts", "recovery_attempts"),
                 ]:
                     try:
                         cursor.execute(f"SELECT COUNT(*) FROM {table};")

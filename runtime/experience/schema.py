@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple
 
 logger = logging.getLogger("desktop_webview.experience.schema")
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 MIGRATION_V1_STATEMENTS: List[str] = [
     # 1. Schema Migrations Log
@@ -184,9 +184,71 @@ MIGRATION_V1_STATEMENTS: List[str] = [
     "CREATE INDEX IF NOT EXISTS idx_outcomes_session ON experience_outcomes(session_id);",
 ]
 
+MIGRATION_V2_STATEMENTS: List[str] = [
+    # 10. Normalized Failures (Milestone 2.1 Prompt 2)
+    """
+    CREATE TABLE IF NOT EXISTS normalized_failures (
+        failure_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        mission_id TEXT,
+        action_id TEXT,
+        category TEXT NOT NULL,
+        original_classification TEXT NOT NULL,
+        signature TEXT NOT NULL,
+        confidence REAL NOT NULL DEFAULT 1.0,
+        source TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'FACT',
+        recovery_reference TEXT,
+        trace_reference TEXT,
+        evidence_reference TEXT,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        safe_context_json TEXT,
+        FOREIGN KEY (session_id) REFERENCES review_sessions(session_id) ON DELETE CASCADE
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_failures_session ON normalized_failures(session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_failures_category ON normalized_failures(category);",
+    "CREATE INDEX IF NOT EXISTS idx_failures_signature ON normalized_failures(signature);",
+    "CREATE INDEX IF NOT EXISTS idx_failures_timestamp ON normalized_failures(timestamp);",
+
+    # 11. Recovery Attempts (Milestone 2.1 Prompt 2)
+    """
+    CREATE TABLE IF NOT EXISTS recovery_attempts (
+        recovery_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        action_id TEXT,
+        failure_id TEXT,
+        failure_category TEXT NOT NULL,
+        recovery_action TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL,
+        max_attempts INTEGER NOT NULL,
+        result TEXT NOT NULL,
+        duration_ms REAL NOT NULL,
+        source TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'FACT',
+        error TEXT,
+        evidence_refs_json TEXT,
+        trace_event_id TEXT,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        metadata_json TEXT,
+        FOREIGN KEY (session_id) REFERENCES review_sessions(session_id) ON DELETE CASCADE
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_recovery_session ON recovery_attempts(session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_recovery_category ON recovery_attempts(failure_category);",
+    "CREATE INDEX IF NOT EXISTS idx_recovery_result ON recovery_attempts(result);",
+    "CREATE INDEX IF NOT EXISTS idx_recovery_timestamp ON recovery_attempts(timestamp);",
+]
+
 MIGRATIONS: Dict[int, Tuple[str, List[str]]] = {
     1: ("Baseline Experience Store schema v1", MIGRATION_V1_STATEMENTS),
+    2: ("Failure normalization and recovery attempt tracking schema v2", MIGRATION_V2_STATEMENTS),
 }
+
 
 
 def apply_migrations(conn: sqlite3.Connection) -> int:

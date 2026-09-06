@@ -91,6 +91,7 @@ class SessionState:
     recovery_engine: Optional[Any] = None
     diagnostic_aggregator: Optional[Any] = None
     specialist_dispatcher: Optional[Any] = None
+    experience_adapter: Optional[Any] = None
 
     def __post_init__(self):
         self.reference_registry = ReferenceRegistry(session_id=self.session_id)
@@ -109,6 +110,12 @@ class SessionState:
         if self.specialist_dispatcher is None:
             from runtime.specialist_dispatcher import SpecialistDispatcher
             self.specialist_dispatcher = SpecialistDispatcher()
+        if self.experience_adapter is None:
+            try:
+                from runtime.experience.adapter import ExperienceIntegrationAdapter
+                self.experience_adapter = ExperienceIntegrationAdapter.get_default_adapter()
+            except Exception:
+                self.experience_adapter = None
 
     @property
     def is_active(self) -> bool:
@@ -160,9 +167,17 @@ class SessionManager:
     Guarantees full concurrency without cross-session interference.
     """
 
-    def __init__(self):
+    def __init__(self, experience_adapter: Optional[Any] = None):
         self._sessions: Dict[str, SessionState] = {}
         self._lock = asyncio.Lock()
+        if experience_adapter is not None:
+            self.experience_adapter = experience_adapter
+        else:
+            try:
+                from runtime.experience.adapter import ExperienceIntegrationAdapter
+                self.experience_adapter = ExperienceIntegrationAdapter.get_default_adapter()
+            except Exception:
+                self.experience_adapter = None
 
     async def create_session(self, config: SessionConfig) -> SessionState:
         """
@@ -183,10 +198,19 @@ class SessionManager:
                 updated_at=now,
                 last_heartbeat=now,
                 lease_timeout_sec=config.lease_timeout_sec,
+                experience_adapter=self.experience_adapter,
             )
 
             self._sessions[session_id] = session
             logger.info(f"Created session {session_id} in state {session.lifecycle_state.value}")
+
+            if self.experience_adapter:
+                self.experience_adapter.on_session_created(
+                    session,
+                    project_id=config.metadata.get("project_id"),
+                    metadata=config.metadata,
+                )
+
             return session
 
     def get_session(self, session_id: str) -> SessionState:
@@ -212,6 +236,8 @@ class SessionManager:
             # Perform connection settling
             session.transition_lifecycle(SessionLifecycleState.CONNECTED)
             session.connection_state = ConnectionState.CONNECTED
+            if self.experience_adapter:
+                self.experience_adapter.on_session_updated(session)
             return session
 
     async def activate_session(self, session_id: str, plane: TargetPlane = TargetPlane.NATIVE_SHELL) -> SessionState:
@@ -220,6 +246,8 @@ class SessionManager:
         async with self._lock:
             session.transition_lifecycle(SessionLifecycleState.ACTIVE)
             session.active_plane = plane
+            if self.experience_adapter:
+                self.experience_adapter.on_session_updated(session)
             return session
 
     async def mark_degraded(self, session_id: str, reason: str = "degraded_subsystem") -> SessionState:
@@ -229,6 +257,8 @@ class SessionManager:
             session.transition_lifecycle(SessionLifecycleState.DEGRADED)
             session.diagnostic_state["degraded_reason"] = reason
             logger.warning(f"Session {session_id} entered DEGRADED state: {reason}")
+            if self.experience_adapter:
+                self.experience_adapter.on_session_updated(session)
             return session
 
     async def mark_target_lost(self, session_id: str, reason: str = "target_process_or_window_lost") -> SessionState:
@@ -238,6 +268,8 @@ class SessionManager:
             session.transition_lifecycle(SessionLifecycleState.TARGET_LOST)
             session.diagnostic_state["target_lost_reason"] = reason
             logger.error(f"Session {session_id} entered TARGET_LOST state: {reason}")
+            if self.experience_adapter:
+                self.experience_adapter.on_session_updated(session)
             return session
 
     async def mark_recoverable(self, session_id: str, reason: str = "reconnection_candidate") -> SessionState:
@@ -247,6 +279,8 @@ class SessionManager:
             session.transition_lifecycle(SessionLifecycleState.RECOVERABLE)
             session.diagnostic_state["recoverable_reason"] = reason
             logger.info(f"Session {session_id} entered RECOVERABLE state: {reason}")
+            if self.experience_adapter:
+                self.experience_adapter.on_session_updated(session)
             return session
 
     async def mark_recovered(self, session_id: str) -> SessionState:
@@ -258,6 +292,8 @@ class SessionManager:
             session.diagnostic_state.pop("degraded_reason", None)
             session.diagnostic_state.pop("recoverable_reason", None)
             logger.info(f"Session {session_id} successfully RECOVERED to ACTIVE state")
+            if self.experience_adapter:
+                self.experience_adapter.on_session_updated(session)
             return session
 
     async def heartbeat(self, session_id: str) -> None:
@@ -295,6 +331,10 @@ class SessionManager:
             session.cleanup_state["closed_at"] = datetime.now(timezone.utc).isoformat()
             session.cleanup_state["close_reason"] = reason
             logger.info(f"Closed session {session_id} cleanly ({reason})")
+
+            if self.experience_adapter:
+                self.experience_adapter.on_session_closed(session, reason=reason)
+
             return session
 
     async def list_active_sessions(self) -> List[SessionState]:
@@ -324,5 +364,8 @@ class SessionManager:
                     except InvalidStateTransitionError:
                         session.lifecycle_state = SessionLifecycleState.CLOSED
                     session.cleanup_state["close_reason"] = "lease_timeout"
+                    if self.experience_adapter:
+                        self.experience_adapter.on_session_closed(session, reason="lease_timeout")
                     pruned.append(s_id)
         return pruned
+
