@@ -21,6 +21,8 @@ SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SKILL_ROOT not in sys.path:
     sys.path.insert(0, SKILL_ROOT)
 
+from core.version import get_version_info
+
 
 def check_environment() -> Dict[str, Any]:
     """Inspects Python version, OS platform, and system architecture."""
@@ -266,9 +268,10 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
     webkit_status, webkit_detail = detect_webkit()
 
     overall_ready = env_res["passed"] and deps_res["passed"] and core_res["passed"]
+    vinfo = get_version_info()
 
     payload = {
-        "version": "1.0.0",
+        "version": vinfo.product_version,
         "overall_ready": overall_ready,
         "environment": env_res,
         "dependencies": deps_res,
@@ -289,7 +292,7 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
 
     # Formatted Terminal Dashboard
     print("=" * 65)
-    print("        Desktop WebView Reviewer v1.0.0 - Doctor Check")
+    print(f"        Desktop WebView Reviewer v{vinfo.product_version} - Doctor Check")
     print("=" * 65)
     print(f"Python Environment:   {env_res['status']:<10} ({env_res['python_version']} {env_res['architecture']} on {env_res['os_name']})")
     print(f"Core Dependencies:    {'PASS' if deps_res['passed'] else 'FAIL':<10} (websockets: {deps_res.get('websockets', {}).get('version', 'N/A')}, psutil: {deps_res.get('psutil', {}).get('version', 'N/A')})")
@@ -318,7 +321,7 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
         print("-" * 65)
 
     if overall_ready:
-        print("Overall Health:       READY (v1.0.0)")
+        print(f"Overall Health:       READY (v{vinfo.product_version})")
         print("=" * 65)
         return 0
     else:

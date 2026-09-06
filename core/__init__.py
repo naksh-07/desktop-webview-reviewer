@@ -18,12 +18,14 @@ from .actions import WebviewActions
 from .assertions import WebviewAssertions, AssertionResult
 from .evidence import EvidenceCollector
 from .cleanup import ProcessCleanup
+from .version import __version__, get_version_info, VersionInfo
 
-__version__ = "2.0.0"
 __author__ = "Antigravity Team"
 
 __all__ = [
     "__version__",
+    "get_version_info",
+    "VersionInfo",
     "__author__",
     "CapabilityName",
     "CapabilityStatus",

@@ -23,13 +23,15 @@ class TestDoctorDiagnostics(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.doctor_script), f"doctor.py not found at {self.doctor_script}")
 
     def test_doctor_execution_default(self):
+        from core.version import get_version_info
+        expected_version = get_version_info().product_version
         res = subprocess.run(
             [self.python_exe, self.doctor_script],
             capture_output=True,
             text=True
         )
         self.assertEqual(res.returncode, 0, f"Doctor failed with stderr: {res.stderr}")
-        self.assertIn("Desktop WebView Reviewer v1.0.0 - Doctor Check", res.stdout)
+        self.assertIn(f"Desktop WebView Reviewer v{expected_version} - Doctor Check", res.stdout)
         self.assertIn("Python Environment:", res.stdout)
         self.assertIn("Core Dependencies:", res.stdout)
         self.assertIn("Overall Health:", res.stdout)
@@ -43,7 +45,9 @@ class TestDoctorDiagnostics(unittest.TestCase):
         )
         self.assertEqual(res.returncode, 0, f"Doctor --json failed: {res.stderr}")
         data = json.loads(res.stdout)
-        self.assertEqual(data["version"], "1.0.0")
+        from core.version import get_version_info
+        expected_version = get_version_info().product_version
+        self.assertEqual(data["version"], expected_version)
         self.assertTrue(data["overall_ready"])
         self.assertIn("environment", data)
         self.assertIn("dependencies", data)

@@ -18,6 +18,7 @@ from runtime.mcp.runtime_bridge import RuntimeBridge
 from runtime.mcp.tools import register_all_tools
 from runtime.mcp.resources import register_all_resources
 from runtime.mcp.prompts import register_all_prompts
+from core.version import get_version_info
 
 logger = logging.getLogger("desktop_webview.mcp.server")
 
@@ -25,15 +26,16 @@ logger = logging.getLogger("desktop_webview.mcp.server")
 def create_mcp_server(
     daemon: Optional[DesktopDaemon] = None,
     name: str = "desktop-webview-reviewer",
-    version: str = "1.0.0",
+    version: Optional[str] = None,
 ) -> MCPServer:
     """
     Factory creating a fully configured MCPServer instance with all 12 tools,
     passive resources, and workflow prompts bound to the DesktopDaemon.
     """
+    effective_version = version or get_version_info().product_version
     server = MCPServer(
         name=name,
-        version=version,
+        version=effective_version,
         instructions=(
             "Desktop WebView Reviewer Control Plane: Universal desktop application testing, "
             "inspection, and forensic verification gateway. All UI text returned in "
@@ -58,8 +60,9 @@ def run_diagnostics() -> int:
     import shutil
     from pathlib import Path
 
+    vinfo = get_version_info()
     print("=== Desktop WebView Reviewer Diagnostics ===")
-    print(f"Version: 1.0.0 (Architecture H, Production Release)")
+    print(f"Version: {vinfo.product_version} (Architecture H, Production Release)")
     print(f"Platform: {platform.system()} {platform.release()} (Build {platform.version()})")
     print(f"Python: {sys.version.split()[0]} ({sys.executable})")
 

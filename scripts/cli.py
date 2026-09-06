@@ -73,6 +73,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             from scripts.security_audit import main as audit_main
             audit_main()
             return 0
+        elif cmd in ("version", "--version", "-V"):
+            sys.argv.pop(1)
+            from scripts.update_cli import cmd_version
+            return cmd_version(sys.argv[1:])
+        elif cmd == "update":
+            sys.argv.pop(1)
+            from scripts.update_cli import cmd_update
+            return cmd_update(sys.argv[1:])
         elif cmd in ("release-validate", "validate-release", "release"):
             sys.argv.pop(1)
             from scripts.release_validator import main as release_main
@@ -83,6 +91,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     print("Usage: desktop-reviewer <command> [options]")
     print()
     print("Commands:")
+    print("  version          Display authoritative version contract and environment metadata")
+    print("  update           Lifecycle management: check, install, status, pin, unpin, rollback, doctor")
     print("  mission          Autonomous review missions (validate, run, status, cancel)")
     print("  specialists      Invoke and inspect subordinate specialist subagents (Explorer, Tester, etc.)")
     print("  diagnostics      Unified diagnostic aggregator, failure correlation, and forensics")

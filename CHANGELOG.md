@@ -27,6 +27,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0-lifecycle] - 2026-09-06
+
+### Lifecycle, Versioning, Update & Rollback System
+- **Authoritative Version Contract** (`core/version.py`):
+  - Single source of truth for product name, version, package version, git commit, installation source, runtime path, MCP executable, and skill path.
+  - Module-level `__version__` and structured `VersionInfo` dataclass.
+  - Replaces all hardcoded version references across the codebase.
+- **Product Lifecycle & Update Engine** (`runtime/lifecycle/`):
+  - `InstallationRegistry`: Persistent JSON state at `~/.desktop_webview_reviewer/installation_state.json` with atomic writes, crash recovery, and corrupted state backup.
+  - `GitHubReleasesClient`: GitHub API-based release discovery with semver ordering, offline/rate-limit fail-soft resilience, and mock file support for testing.
+  - `LifecycleUpdater`: Safe transactional updater with pre/post-install validation gates (import check, version consistency, MCP self-test) and automatic rollback on failure.
+  - `SkillSynchronizer`: Discovers Antigravity skill installations, parses YAML frontmatter for version/compatibility range, evaluates compatibility with active runtime.
+  - `LifecycleDoctor`: 7-point deep consistency checker (package import, state alignment, CLI/MCP executable resolution, MCP self-test, skill compatibility, stale installation detection).
+- **CLI Commands** (`scripts/update_cli.py`):
+  - `desktop-reviewer version [--json]` — Authoritative version contract display.
+  - `desktop-reviewer update check [--json]` — Check for compatible updates.
+  - `desktop-reviewer update install <version> [--json]` — Safe atomic version installation.
+  - `desktop-reviewer update status [--json]` — Full lifecycle status.
+  - `desktop-reviewer update pin <version> [--json]` — Pin to known-good version.
+  - `desktop-reviewer update unpin [--json]` — Resume normal release tracking.
+  - `desktop-reviewer update rollback [--json]` — Roll back to previous known-good.
+  - `desktop-reviewer update doctor [--json]` — Deep installation health check.
+- **MCP Resources** (passive, read-only):
+  - `desktop://system/version` — Full version contract payload.
+  - `desktop://system/lifecycle` — Update status, pinning, and lifecycle state.
+- **Skill Metadata Synchronized**:
+  - Both repository and global Antigravity skill (`~/.gemini/config/skills/desktop-webview-reviewer/SKILL.md`) updated with `version: 2.0.0` and `compatible_runtime_range: ">=2.0.0,<3.0.0"`.
+- **Invariants Preserved**:
+  - Exactly 12 primary MCP tools unchanged.
+  - Architecture H frozen. No new agents, orchestration layers, or framework expansions.
+
+---
+
 ## [2.0.0-phase17-18] - 2026-09-05
 
 ### Highlights: Phase 17–18 — Autonomous Review Missions & Host Integrations

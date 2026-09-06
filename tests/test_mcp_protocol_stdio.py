@@ -32,7 +32,8 @@ class TestMcpProtocolStdio(unittest.IsolatedAsyncioTestCase):
             async with ClientSession(read, write) as session:
                 init_res = await session.initialize()
                 self.assertEqual(init_res.server_info.name, "desktop-webview-reviewer")
-                self.assertEqual(init_res.server_info.version, "1.0.0")
+                from core.version import get_version_info
+                self.assertEqual(init_res.server_info.version, get_version_info().product_version)
 
                 tools_res = await session.list_tools()
                 tool_names = [t.name for t in tools_res.tools]

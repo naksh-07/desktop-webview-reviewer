@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.version import get_version_info
+
 logger = logging.getLogger("desktop_webview.release_validator")
 # Ensure all prints are unbuffered and immediate
 print = functools.partial(print, flush=True)

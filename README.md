@@ -102,6 +102,8 @@ The MCP server exposes exactly **12 cohesive, architecture-approved tools**:
 - **Evidence Manifests:** `desktop://evidence/{evidence_id}` — Byte-for-byte SHA-256 sealed test manifest.
 - **Forensic Screenshots:** `desktop://evidence/{evidence_id}/screenshot` — PNG screenshot artifact.
 - **Session Registry:** `desktop://sessions` & `desktop://session/{id}` — Active session diagnostics.
+- **System Version:** `desktop://system/version` — Authoritative product version contract.
+- **System Lifecycle:** `desktop://system/lifecycle` — Update status, pinning, and lifecycle state.
 - **Agent Prompts:** `desktop_review` — Seed prompt for autonomous application review.
 
 ---
@@ -184,6 +186,37 @@ desktop-webview-mcp --diagnostics
 
 # Start MCP Server on stdio (for agent integration)
 desktop-webview-mcp --transport stdio
+```
+
+---
+
+### Lifecycle & Version Management
+```powershell
+# Display authoritative version contract (product, package, git commit, runtime)
+desktop-reviewer version
+desktop-reviewer version --json
+
+# Check for available updates (safe, offline-resilient)
+desktop-reviewer update check
+
+# Install a specific version with pre/post-validation gates
+desktop-reviewer update install 2.1.0
+
+# View full lifecycle status (installed, pinned, rollback, skill compat)
+desktop-reviewer update status
+desktop-reviewer update status --json
+
+# Pin installation to known-good version (suppresses automatic updates)
+desktop-reviewer update pin 2.0.0
+
+# Remove version pin, resume tracking latest stable release
+desktop-reviewer update unpin
+
+# Roll back to previous known-good version (fail-closed)
+desktop-reviewer update rollback
+
+# Run deep installation consistency health check
+desktop-reviewer update doctor
 ```
 
 ---

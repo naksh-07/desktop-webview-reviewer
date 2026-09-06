@@ -16,6 +16,8 @@ from runtime.mcp.security import SecurityGate
 from runtime.mcp.errors import McpControlPlaneException, McpErrorCode, map_exception_to_mcp_error
 from runtime.native_supervisor import NativeSupervisor
 from runtime.evidence_store import EvidenceStore
+from core.version import get_version_info
+from runtime.lifecycle import LifecycleUpdater
 
 logger = logging.getLogger("desktop_webview.mcp.resources")
 
@@ -294,3 +296,29 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
             "result": result.to_dict() if result else None,
         }
         return json.dumps(payload, indent=2)
+
+    # 8. desktop://system/version
+    @server.resource(
+        "desktop://system/version",
+        name="system_version",
+        description="Authoritative product and runtime version contract and environment metadata.",
+        mime_type="application/json",
+    )
+    async def get_system_version() -> str:
+        SecurityGate.validate_resource_uri("desktop://system/version")
+        vinfo = get_version_info()
+        return json.dumps(vinfo.to_dict(), indent=2)
+
+    # 9. desktop://system/lifecycle
+    @server.resource(
+        "desktop://system/lifecycle",
+        name="system_lifecycle",
+        description="Product installation lifecycle status, pinning, and update availability.",
+        mime_type="application/json",
+    )
+    async def get_system_lifecycle() -> str:
+        SecurityGate.validate_resource_uri("desktop://system/lifecycle")
+        updater = LifecycleUpdater()
+        status = updater.get_status()
+        return json.dumps(status, indent=2)
+

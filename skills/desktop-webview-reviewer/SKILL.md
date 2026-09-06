@@ -1,7 +1,8 @@
 ---
 name: desktop-webview-reviewer
 description: Universal desktop application inspection, semantic interaction, hybrid native/web diagnosis, state verification, and cryptographic evidence collection across Windows desktop applications with embedded webviews.
-version: 1.0.0
+version: 2.0.0
+compatible_runtime_range: ">=2.0.0,<3.0.0"
 ---
 
 # Desktop WebView Reviewer — Agent Skill & Operational Policy
@@ -171,3 +172,31 @@ When an interaction or verification fails, diagnose the exact failure domain bef
 | **Evidence** | Manifest hash mismatch, missing artifact | Re-collect evidence; check disk permissions |
 
 **Prohibited**: Random retries without state inspection. If an action fails, inspect the state first!
+
+---
+
+## K. Product Lifecycle, Versioning & Update Policy
+
+Reviewer includes a comprehensive lifecycle, versioning, update, and rollback subsystem:
+
+```text
+Skill (Operating instructions)  ->  Runtime (Machine)  ->  MCP (Interface)  ->  CLI (Operator)
+```
+
+1. **Version Discovery**:
+   - Programmatic inspection: `desktop-reviewer version`
+   - Agent inspection: Read MCP resource `desktop://system/version`
+2. **Update Checking & Agent Notification**:
+   - Check available stable updates: `desktop-reviewer update check`
+   - Review status: `desktop-reviewer update status`
+   - **Anti-Autonomous Mutation Rule**: The agent must NEVER autonomously mutate or upgrade the installed runtime merely because an update exists. The user or controlling orchestrator decides whether and when to install updates.
+3. **Safe Transactional Updates**:
+   - Install explicit release: `desktop-reviewer update install <version>`
+   - Fails closed: automatic rollback to previous known-good version if post-install validation (imports, CLI dispatch, MCP self-test) fails.
+4. **Regression Protection & Version Pinning**:
+   - Pin known-good version: `desktop-reviewer update pin <version>`
+   - Unpin and resume stable channel: `desktop-reviewer update unpin`
+   - Restore previous known-good runtime: `desktop-reviewer update rollback`
+5. **Installation Consistency Doctor**:
+   - Validate system health: `desktop-reviewer update doctor`
+
