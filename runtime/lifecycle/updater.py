@@ -145,6 +145,12 @@ class LifecycleUpdater:
             and state.previous_known_good_version != state.installed_version
         )
 
+        try:
+            from runtime.experience import ExperienceStore
+            exp_report = ExperienceStore.get_default_store().get_health_report().to_dict()
+        except Exception:
+            exp_report = None
+
         return {
             "installed_version": state.installed_version,
             "pinned_version": state.pinned_version,
@@ -158,6 +164,7 @@ class LifecycleUpdater:
             "last_successful_validation": state.last_successful_validation,
             "runtime_location": state.runtime_location,
             "skill": sync.to_dict(),
+            "experience_store": exp_report,
         }
 
     def pin(self, version: str) -> InstallationStateRecord:

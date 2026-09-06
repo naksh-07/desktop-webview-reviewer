@@ -143,6 +143,9 @@ def cmd_update(argv: Optional[List[str]] = None) -> int:
             skill_info = status_dict.get("skill", {})
             print(f"Skill Compatibility: {'COMPATIBLE' if skill_info.get('is_compatible') else 'ACTION REQUIRED'}")
             print(f"Skill Diagnosis:     {skill_info.get('diagnosis', 'N/A')}")
+            exp_info = status_dict.get("experience_store")
+            if exp_info:
+                print(f"Experience Store:    {exp_info.get('health', 'UNKNOWN')} (Schema v{exp_info.get('schema_version', '?')} at {exp_info.get('storage_path', 'N/A')})")
         return 0
 
     elif args.subcommand == "pin":

@@ -322,3 +322,17 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         status = updater.get_status()
         return json.dumps(status, indent=2)
 
+    # 10. desktop://system/experience
+    @server.resource(
+        "desktop://system/experience",
+        name="system_experience",
+        description="Experience Store health, configuration, schema version, and record counts.",
+        mime_type="application/json",
+    )
+    async def get_system_experience() -> str:
+        SecurityGate.validate_resource_uri("desktop://system/experience")
+        from runtime.experience import ExperienceStore
+        exp_store = ExperienceStore.get_default_store()
+        health = exp_store.get_health_report()
+        return json.dumps(health.to_dict(), indent=2)
+

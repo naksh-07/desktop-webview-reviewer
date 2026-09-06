@@ -230,6 +230,44 @@ class LifecycleDoctor:
                 )
             )
 
+        # Check 8: Experience Store health and storage integrity
+        try:
+            from runtime.experience import ExperienceStore
+            exp_store = ExperienceStore.get_default_store()
+            health = exp_store.get_health_report()
+            if health.health == "OK" and health.integrity_check == "ok":
+                checks.append(
+                    DoctorCheckResult(
+                        name="experience_store",
+                        status="PASS",
+                        message=(
+                            f"Experience Store operational at {health.storage_path} "
+                            f"(schema v{health.schema_version}, {sum(health.record_counts.values())} records)."
+                        ),
+                        details=health.to_dict(),
+                    )
+                )
+            else:
+                checks.append(
+                    DoctorCheckResult(
+                        name="experience_store",
+                        status="WARN",
+                        message=(
+                            f"Experience Store reported {health.health} status: {health.integrity_check} "
+                            f"at {health.storage_path}."
+                        ),
+                        details=health.to_dict(),
+                    )
+                )
+        except Exception as e:
+            checks.append(
+                DoctorCheckResult(
+                    name="experience_store",
+                    status="WARN",
+                    message=f"Experience Store initialization check failed: {e}",
+                )
+            )
+
         return DoctorReport(
             passed=overall_passed,
             installed_version=vinfo.product_version,

@@ -139,6 +139,23 @@ def check_core_subsystems() -> Dict[str, Any]:
         subsystems["monitor_topology"] = {"status": "PASS", "message": f"{len(monitors)} physical monitor(s) discovered"}
 
         subsystems["forensics"] = {"status": "PASS", "message": "Win32 GUI forensics engine ready"}
+
+        # Desktop WebView Reviewer 2.1 Experience Store foundation
+        try:
+            from runtime.experience import ExperienceStore
+            exp_store = ExperienceStore.get_default_store()
+            health = exp_store.get_health_report()
+            subsystems["experience_store"] = {
+                "status": "PASS" if health.health == "OK" else "WARN",
+                "message": f"Experience Store active ({health.health}, schema v{health.schema_version}, {sum(health.record_counts.values())} records)",
+                "details": health.to_dict(),
+            }
+        except Exception as exp_err:
+            subsystems["experience_store"] = {
+                "status": "WARN",
+                "message": f"Experience Store fallback: {exp_err}",
+            }
+
         subsystems["imports"] = {"status": "PASS", "message": "All core modules imported successfully"}
     except Exception as e:
         all_passed = False
@@ -298,6 +315,9 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
     print(f"Core Dependencies:    {'PASS' if deps_res['passed'] else 'FAIL':<10} (websockets: {deps_res.get('websockets', {}).get('version', 'N/A')}, psutil: {deps_res.get('psutil', {}).get('version', 'N/A')})")
     print(f"Core Subsystems:      {core_res.get('imports', {}).get('status', 'PASS'):<10} ({core_res.get('registry', {}).get('message', 'OK')})")
     print(f"CDP Transport:        PASS       (Async WebSocket 50MB payload)")
+    exp_details = core_res.get("experience_store", {})
+    exp_status = exp_details.get("status", "PASS")
+    print(f"Experience Store:     {exp_status:<10} ({exp_details.get('message', 'Ready')})")
     print("-" * 65)
     print("Host Engine Availability & Verification Status:")
     print(f"  QtWebEngine:        {qt_status:<15} [RUNTIME_VERIFIED on Windows]")
@@ -318,6 +338,15 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
         print(f"  Chromium:         {chrom_detail}")
         print(f"  CEF:              {cef_detail}")
         print(f"  WebKit:           {webkit_detail}")
+        exp_data = core_res.get("experience_store", {}).get("details", {})
+        if exp_data:
+            print("  Experience Store:")
+            print(f"    enabled:  {exp_data.get('enabled')}")
+            print(f"    path:     {exp_data.get('storage_path')}")
+            print(f"    database: {exp_data.get('database_file')}")
+            print(f"    schema:   v{exp_data.get('schema_version')}")
+            print(f"    health:   {exp_data.get('health')}")
+            print(f"    records:  {exp_data.get('record_counts')}")
         print("-" * 65)
 
     if overall_ready:

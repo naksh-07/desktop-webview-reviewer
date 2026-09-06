@@ -225,12 +225,27 @@ desktop-reviewer update doctor
 
 For complete documentation:
 - [Final 2.0 Certification & Production Release Report (Doc 31)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
+- [Experience Store Foundation (Doc 33)](docs/architecture/33_EXPERIENCE_STORE_FOUNDATION.md)
 - [2.0 Architecture Roadmap (Doc 27)](docs/architecture/27_DESKTOP_REVIEWER_2.0_ROADMAP.md)
 - [System Architecture](docs/architecture/12_SYSTEM_ARCHITECTURE.md)
 - [MCP Interface Specification](docs/architecture/14_MCP_INTERFACE_SPEC.md)
 - [Usage Guide](docs/usage/USAGE_GUIDE.md)
 - [Security Model](docs/security/SECURITY.md)
 - [Troubleshooting](docs/troubleshooting/TROUBLESHOOTING.md)
+
+---
+
+## Experience Store (Desktop WebView Reviewer 2.1 Foundation)
+
+Desktop WebView Reviewer 2.1 introduces a local, durable, schema-versioned **Experience Store** backed by SQLite in WAL mode:
+- **Local-Only Storage:** Stored by default in `%LOCALAPPDATA%\DesktopWebViewReviewer\experience\experience.db`.
+- **Configurable Directory:** Custom location configurable via `DESKTOP_REVIEWER_EXPERIENCE_DIR` or programmatic `ExperienceConfig`. Never created inside the repository source tree.
+- **Durable Provenance & Outcomes:** Tracks sessions, admitted missions, action references, trace event references, evidence references, and tripartite verdicts (`PASS`, `FAIL`, `UNVERIFIED`).
+- **Privacy Boundary Enforced:** Strictly blocks raw chain-of-thought, model reasoning, prompt transcripts, passwords, tokens, API keys, cookies, and arbitrary filesystem dumps.
+- **Fail-Safe Operation:** Failures in historical persistence never fail or interrupt the live desktop review pipeline (graceful degradation).
+- **Passive Inspection:** Inspected via `desktop-reviewer doctor`, `desktop-reviewer update doctor`, and passive MCP resource `desktop://system/experience`.
+
+---
 
 **Status:** `2.0.0b1 FIRST BETA RELEASE (VERDICT: PASS)`  
 - **Architecture H Frozen:** Exactly 12 primary MCP tools, decoupled supervisory daemon, zero hidden God-agent loops.
