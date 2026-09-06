@@ -38,7 +38,7 @@ async def test_anki_a11y():
                     elif t.get("type") == "page" and not target_ws:
                         target_ws = t.get("webSocketDebuggerUrl")
                         target_info = t
-                if target_ws:
+                if target_ws and target_info is not None:
                     print(f"Discovered QtWebEngine Page: {target_info.get('title')} -> {target_ws}")
                     break
         except Exception:
@@ -58,7 +58,8 @@ async def test_anki_a11y():
             t_tree = (time.perf_counter() - t0) * 1000.0
             
             nodes = resp2.get("result", {}).get("nodes", [])
-            results["qtwebengine_target_title"] = target_info.get("title")
+            if target_info is not None:
+                results["qtwebengine_target_title"] = target_info.get("title")
             results["qtwebengine_a11y_latency_ms"] = round(t_tree, 3)
             results["qtwebengine_a11y_nodes"] = len(nodes)
             print(f"QtWebEngine AX Tree: {len(nodes)} nodes retrieved in {t_tree:.2f}ms")

@@ -49,8 +49,11 @@ class CDPClient:
         self._listener_task = asyncio.create_task(self._listen())
 
     async def _listen(self):
+        ws = self.ws
+        if ws is None:
+            return
         try:
-            async for message in self.ws:
+            async for message in ws:
                 data = json.loads(message)
                 if "id" in data and data["id"] in self._pending:
                     self._pending[data["id"]].set_result(data)
@@ -58,12 +61,15 @@ class CDPClient:
             pass
 
     async def send(self, method, params=None):
+        ws = self.ws
+        if ws is None:
+            raise RuntimeError("CDPClient is not connected.")
         self._msg_id += 1
         mid = self._msg_id
         fut = asyncio.get_running_loop().create_future()
         self._pending[mid] = fut
         payload = {"id": mid, "method": method, "params": params or {}}
-        await self.ws.send(json.dumps(payload))
+        await ws.send(json.dumps(payload))
         res = await asyncio.wait_for(fut, timeout=10.0)
         del self._pending[mid]
         if "error" in res:
