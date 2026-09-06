@@ -87,7 +87,7 @@ class ProductionReleaseValidator:
         overall_verdict = "PASS"
 
         print("=" * 70)
-        print("  DESKTOP WEBVIEW REVIEWER 2.0 - PRODUCTION RELEASE PIPELINE")
+        print("  DESKTOP WEBVIEW REVIEWER 2.0 - FIRST BETA RELEASE PIPELINE")
         print("=" * 70)
 
         # ---------------------------------------------------------------------
@@ -367,7 +367,7 @@ class ProductionReleaseValidator:
         ))
 
         report = ReleaseGateReport(
-            version="2.0.0",
+            version=get_version_info().product_version,
             overall_verdict=overall_verdict,
             stages=stages,
             artifacts=artifact_manifests,

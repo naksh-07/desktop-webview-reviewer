@@ -62,7 +62,7 @@ def run_diagnostics() -> int:
 
     vinfo = get_version_info()
     print("=== Desktop WebView Reviewer Diagnostics ===")
-    print(f"Version: {vinfo.product_version} (Architecture H, Production Release)")
+    print(f"Version: {vinfo.product_version} (Architecture H, First Beta Release)")
     print(f"Platform: {platform.system()} {platform.release()} (Build {platform.version()})")
     print(f"Python: {sys.version.split()[0]} ({sys.executable})")
 
@@ -115,9 +115,9 @@ def run_self_test() -> int:
         # Check 3: Tool registration completeness
         print("[3/7] Verifying all 12 MCP tools registered...", end=" ")
         expected_tools = {
-            "desktop_launch", "desktop_attach", "desktop_close", "desktop_list_sessions",
-            "desktop_inspect", "desktop_click", "desktop_type", "desktop_press_key",
-            "desktop_hover", "desktop_scroll", "desktop_evaluate", "desktop_collect_evidence",
+            "desktop_launch", "desktop_attach", "desktop_inspect", "desktop_click",
+            "desktop_type", "desktop_press_key", "desktop_hover", "desktop_scroll",
+            "desktop_handle_dialog", "desktop_evaluate", "desktop_assert", "desktop_collect_evidence",
         }
         # Verify tools are present on server
         checks_passed += 1
@@ -189,10 +189,11 @@ def main() -> None:
         prog="desktop-webview-mcp",
         description="Desktop WebView Reviewer MCP Control Plane (Architecture H)",
     )
+    vinfo = get_version_info()
     parser.add_argument(
         "--version",
         action="version",
-        version="desktop-webview-reviewer 1.0.0 (Architecture H, Production Release)",
+        version=f"desktop-webview-reviewer {vinfo.product_version} (Architecture H, First Beta Release)",
     )
     parser.add_argument(
         "--diagnostics",

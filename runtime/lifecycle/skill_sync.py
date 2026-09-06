@@ -117,7 +117,7 @@ class SkillSynchronizer:
         try:
             runtime_v = Version(runtime_ver_str)
             spec = SpecifierSet(compat_range)
-            if runtime_v not in spec:
+            if not spec.contains(runtime_v, prereleases=True):
                 is_compatible = False
         except (InvalidVersion, InvalidSpecifier):
             is_compatible = False

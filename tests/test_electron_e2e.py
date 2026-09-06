@@ -23,6 +23,7 @@ except ImportError:
 from adapters import get_adapter
 from core.cleanup import ProcessCleanup
 from core.models import TargetCriteria, VerificationLevel
+from launchers.process_launcher import ProcessLauncher
 
 
 class TestElectronRealRuntimeE2E(unittest.TestCase):
@@ -36,7 +37,7 @@ class TestElectronRealRuntimeE2E(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.port = 9234
+        self.port = ProcessLauncher.find_free_port(start_port=9280)
         self.fixture_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "fixtures", "electron_app"))
         self.proc = None
 

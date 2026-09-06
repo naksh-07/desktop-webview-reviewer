@@ -20,6 +20,7 @@ except ImportError:
 from adapters import get_adapter
 from core.cleanup import ProcessCleanup
 from core.models import TargetCriteria, VerificationLevel
+from launchers.process_launcher import ProcessLauncher
 
 
 def find_edge_or_webview2_binary():
@@ -50,7 +51,7 @@ class TestWebView2RealRuntimeE2E(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.port = 9232
+        self.port = ProcessLauncher.find_free_port(start_port=9310)
         self.fixture_html = os.path.abspath(os.path.join(os.path.dirname(__file__), "fixtures", "webview2_app.html"))
         self.assertTrue(os.path.isfile(self.fixture_html), f"Fixture HTML missing: {self.fixture_html}")
         self.proc = None

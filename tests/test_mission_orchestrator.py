@@ -260,7 +260,7 @@ class TestMissionOrchestrator(unittest.TestCase):
             duration_ms=10.0,
             result="SUCCESS",
         )
-        mock_recovery_engine.attempt_recovery = AsyncMock(return_value=(True, mock_rec_record))
+        mock_recovery_engine.execute_recovery = AsyncMock(return_value=(True, mock_rec_record))
 
         orchestrator = ReviewMissionOrchestrator(
             dispatcher=mock_dispatcher,

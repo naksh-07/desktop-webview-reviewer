@@ -1,8 +1,8 @@
 ---
 name: desktop-webview-reviewer
 description: Universal desktop application inspection, semantic interaction, hybrid native/web diagnosis, state verification, and cryptographic evidence collection across Windows desktop applications with embedded webviews.
-version: 2.0.0
-compatible_runtime_range: ">=2.0.0,<3.0.0"
+version: 2.0.0b1
+compatible_runtime_range: ">=2.0.0a0,<3.0.0"
 ---
 
 # Desktop WebView Reviewer — Agent Skill & Operational Policy

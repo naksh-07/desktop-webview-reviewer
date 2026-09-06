@@ -447,9 +447,11 @@ class TestUpdateCheckStates(unittest.TestCase):
     def test_up_to_date(self):
         from runtime.lifecycle.models import LifecycleState
         from runtime.lifecycle.updater import LifecycleUpdater
+        from core.version import get_version_info
 
+        curr_v = get_version_info().product_version
         self._write_mock_releases([
-            {"tag_name": "v2.0.0", "name": "2.0.0", "body": "", "published_at": "2026-01-01T00:00:00Z"},
+            {"tag_name": f"v{curr_v}", "name": curr_v, "body": "", "published_at": "2026-01-01T00:00:00Z"},
         ])
         updater = LifecycleUpdater()
         res = updater.check_for_updates()
@@ -646,13 +648,15 @@ class TestSkillSynchronization(unittest.TestCase):
 
     def test_synchronizer_compatible_skill(self):
         from runtime.lifecycle.skill_sync import SkillSynchronizer
+        from core.version import get_version_info
 
+        curr_v = get_version_info().product_version
         skill_md = self.skill_dir / "SKILL.md"
-        skill_md.write_text(textwrap.dedent("""\
+        skill_md.write_text(textwrap.dedent(f"""\
             ---
             name: desktop-webview-reviewer
-            version: 2.0.0
-            compatible_runtime_range: ">=2.0.0,<3.0.0"
+            version: {curr_v}
+            compatible_runtime_range: ">=2.0.0a0,<3.0.0"
             ---
             # Skill Content
         """), encoding="utf-8")

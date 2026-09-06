@@ -75,8 +75,7 @@ class TestPhase11RealityReconciliation(unittest.TestCase):
 
         # Contradiction assertion
         self.assertGreaterEqual(len(snapshot.contradictions), 1)
-        types = [c["type"] for c in snapshot.contradictions]
-        self.assertIn("CLOAKED_BUT_DOM_VISIBLE", types)
+        self.assertTrue(any("CLOAKED_BUT_DOM_VISIBLE" in c for c in snapshot.contradictions))
 
     def test_truth_hierarchy_minimized_window_overrides_dom(self):
         """When window is minimized, DOM visible target must not be physically actionable."""
@@ -95,8 +94,8 @@ class TestPhase11RealityReconciliation(unittest.TestCase):
         self.assertFalse(target.actionability.is_actionable)
         self.assertIn("minimized", target.actionability.reason.lower())
 
-        types = [c["type"] for c in snapshot.contradictions]
-        self.assertIn("MINIMIZED_BUT_DOM_VISIBLE", types)
+        self.assertGreaterEqual(len(snapshot.contradictions), 1)
+        self.assertTrue(any("MINIMIZED_BUT_DOM_VISIBLE" in c for c in snapshot.contradictions))
 
     def test_truth_hierarchy_modal_occlusion(self):
         """When a modal covers a native/web element, it must not be reported as safely actionable."""
@@ -128,8 +127,8 @@ class TestPhase11RealityReconciliation(unittest.TestCase):
         self.assertFalse(target.actionability.is_actionable)
         self.assertIn("modal", target.actionability.reason.lower())
 
-        types = [c["type"] for c in snapshot.contradictions]
-        self.assertIn("OCCLUDED_BY_MODAL", types)
+        self.assertGreaterEqual(len(snapshot.contradictions), 1)
+        self.assertTrue(any("OCCLUDED_BY_MODAL" in c for c in snapshot.contradictions))
 
     def test_reconciled_valid_target_actionability(self):
         """When native window is visible, uncloaked, and unoccluded, target is actionable."""

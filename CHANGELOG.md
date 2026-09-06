@@ -5,29 +5,35 @@ All notable changes to the `desktop-webview-reviewer` skill are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-09-06
+## [2.0.0b1] - 2026-09-06
 
-### Highlights: Phase 19–20 — Real-App Adversarial Certification & Production Release
-- **Production Release Candidate Verification**:
-  - Achieved official `PASS` verdict across the deterministic 8-gate release validation pipeline (`scripts/release_validator.py`).
-  - Audited and verified all 6 security domains (`scripts/security_audit.py`): Process, Network, Filesystem, Data, Authority, and Release Security.
-  - Verified package builds (`uv build --out-dir dist`) with zero test fixture, mock, or development harness contamination.
+### First Beta Release — Architecture H Frozen & Lifecycle Subsystem
+- **First Beta Release Identity**:
+  - Authoritative canonical version `2.0.0b1` (PEP 440 compliant) and Git / GitHub release tag `v2.0.0-beta.1`.
+  - Reconciled package classifiers: `Development Status :: 4 - Beta` and `Operating System :: Microsoft :: Windows`.
+  - Architecture H is frozen: exactly 12 primary MCP tools, decoupled supervisory daemon, zero hidden God-agent planning loops.
+- **Product Lifecycle, Versioning, Update & Rollback System** (`runtime/lifecycle/`):
+  - `core/version.py`: Single programmatic source of truth for product name, package version, git commit, installation source, runtime path, MCP executable, and skill path.
+  - `InstallationRegistry`: Persistent JSON state at `~/.desktop_webview_reviewer/installation_state.json` with atomic writes, crash recovery, and corrupted-state backup.
+  - `GitHubReleasesClient`: Native GitHub API client discovering releases with semver ordering, prerelease channel filtering, offline/rate-limit fail-soft tolerance, and mock release support.
+  - `LifecycleUpdater`: Atomic transactional updater with pre-install release validation, known-good version tracking, post-install health checks (import, version consistency, MCP self-test), and automatic rollback on failure.
+  - `SkillSynchronizer`: Bi-directional version synchronization and compatibility verification between installed Antigravity skill packages (`SKILL.md` frontmatter) and active Python runtimes.
+  - `LifecycleDoctor`: 7-point deep consistency checker auditing package imports, state alignment, CLI/MCP executables, MCP self-test, skill compatibility, and stale installations.
+  - Version pinning & rollback: explicit `pin <ver>`, `unpin`, and verified `rollback` restoring known-good packages without mutating state on failure.
+- **Passive MCP Lifecycle Resources**:
+  - `desktop://system/version`: Live VersionInfo contract payload.
+  - `desktop://system/lifecycle`: Structured lifecycle state, pinning, and update availability.
 - **Multi-Framework Live Certification Matrix**:
   - Live runtime verified on Windows 11 host across QtWebEngine (Anki Maths), Electron, and WebView2.
   - Generic Chromium/CEF verified at protocol capability level; honest capability attribution applied (`runtime_verified`, `protocol_verified`, `runtime_unavailable`).
-  - Saved machine-readable certification matrix to `evidence/certification/certification_matrix.json`.
-- **Adversarial Hardening**:
-  - Dedicated 28-category adversarial certification test suite (`tests/test_phase19_adversarial_certification.py`) passing with 100% success.
-  - Certified protections against: mission authority mutation, scope expansion, prohibited surface bypass, prompt injection in UI data, specialist privilege escalation, TeamPreview mutation, stale PIDs, ghost CDP endpoints, minimized/cloaked windows, physical occlusion, settlement timeouts, process crash/hang, input failures, recovery exhaustion, circuit breaker retry storms, cancellation races, budget hard exhaustion, and evidence tampering.
-- **Constitutional sovereignty & Invariants Preserved**:
-  - Sovereignty boundary preserved: Antigravity decides WHAT/WHY; Reviewer decides HOW/VERIFY.
-  - Physical Reality Primacy strictly enforced: $\text{Physical Desktop Reality} > \text{Compositor Reality} > \text{DOM/Web Reality}$.
-  - Exactly 12 primary MCP tools preserved without tool count explosion.
-  - Attach-mode process safety guaranteed: externally owned application processes are never terminated upon detachment.
-
----
-
-## [2.0.0-lifecycle] - 2026-09-06
+- **Adversarial Security Hardening**:
+  - Dedicated 28-category adversarial certification test suite (`tests/test_phase19_adversarial_certification.py`) passing 100%.
+  - 6-domain production security audit passing with zero security findings.
+- **Known Environmental Limitations**:
+  - Windows 10/11 64-bit primary supported scope.
+  - DWM composition checks require an active, unoccluded desktop window display.
+  - WebKit minibrowser lacks standard CDP protocol support.
+  - UIA3 sidecar binary uncompiled by default.
 
 ### Lifecycle, Versioning, Update & Rollback System
 - **Authoritative Version Contract** (`core/version.py`):

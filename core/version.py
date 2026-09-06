@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 
 PRODUCT_NAME: str = "Desktop WebView Reviewer"
 PACKAGE_NAME: str = "desktop-webview-reviewer"
-PRODUCT_VERSION: str = "2.0.0"  # Canonical codebase baseline version
+PRODUCT_VERSION: str = "2.0.0b1"  # Canonical codebase baseline version
 
 
 @dataclass(frozen=True)
