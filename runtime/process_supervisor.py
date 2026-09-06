@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set, Any
 
 from runtime.errors import TargetExitedException, CleanupErrorException, TargetMismatchException
@@ -46,7 +46,7 @@ class SupervisedProcess:
     creation_time: float
     job_handle: Optional[int] = None
     is_external: bool = False             # True if attached (not launched by reviewer)
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     exit_code: Optional[int] = None
 
     def is_alive(self) -> bool:

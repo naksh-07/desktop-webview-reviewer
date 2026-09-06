@@ -77,6 +77,8 @@ class TestRuntimeDaemon(unittest.IsolatedAsyncioTestCase):
         session2 = await self.daemon.launch_target(cmd=cmd2)
 
         self.assertNotEqual(session1.session_id, session2.session_id)
+        assert session1.target_process is not None
+        assert session2.target_process is not None
         self.assertNotEqual(session1.target_process.pid, session2.target_process.pid)
 
         # Connect and activate session1, leave session2 untouched
@@ -111,6 +113,7 @@ class TestRuntimeDaemon(unittest.IsolatedAsyncioTestCase):
 
         # Run maintenance cycle
         report = await self.daemon.run_maintenance_cycle()
+        assert session.target_process is not None
         self.assertIn(session.target_process.pid, report["dead_pids"])
         self.assertTrue(session.is_closed)
 

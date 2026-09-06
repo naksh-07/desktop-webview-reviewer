@@ -84,6 +84,7 @@ class HarnessTransportServer:
 
         self._is_running = True
         logger.info(f"Reviewer Harness Transport active on {self.endpoint_url} (session: {self.session_id})")
+        assert self.port is not None
         return (self.host, self.port)
 
     async def stop(self) -> None:

@@ -184,10 +184,11 @@ class WebviewAutomationCore:
             "text": untrusted.sanitized,
             "timestamp": params.get("timestamp"),
         })
-        if getattr(self, "trace_engine", None):
+        t_engine = getattr(self, "trace_engine", None)
+        if t_engine:
             try:
                 active_target = self.target_manager.active_target_id if self.target_manager else None
-                self.trace_engine.ingest_console_message(
+                t_engine.ingest_console_message(
                     level=msg_type,
                     message=untrusted.sanitized,
                     source="console",
@@ -208,10 +209,11 @@ class WebviewAutomationCore:
             "text": untrusted.sanitized,
             "timestamp": details.get("exception", {}).get("timestamp"),
         })
-        if getattr(self, "trace_engine", None):
+        t_engine = getattr(self, "trace_engine", None)
+        if t_engine:
             try:
                 active_target = self.target_manager.active_target_id if self.target_manager else None
-                self.trace_engine.ingest_console_message(
+                t_engine.ingest_console_message(
                     level="error",
                     message=untrusted.sanitized,
                     source="runtime_exception",
@@ -407,7 +409,7 @@ class WebviewAutomationCore:
         top_left_x, top_left_y = CoordinateTransformer.css_to_screen(css_rect.x, css_rect.y, context)
         scaled_w = css_rect.width * dpr
         scaled_h = css_rect.height * dpr
-        return Rect(x=float(top_left_x), y=float(top_left_y), width=float(scaled_w), height=float(scaled_h))
+        return Rect(x=top_left_x, y=top_left_y, width=int(scaled_w), height=int(scaled_h))
 
     # -------------------------------------------------------------------------
     # 5. Accessibility Inspection & Freeze Diagnosis (SP-02)

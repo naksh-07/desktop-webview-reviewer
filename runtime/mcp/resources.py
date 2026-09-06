@@ -64,6 +64,7 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         session = bridge.get_session(clean_sid)
         if session.observation_engine and session.observation_engine.last_snapshot:
             return session.observation_engine.last_snapshot.text_representation
+        assert session.observation_engine is not None, "Observation engine not initialized"
         snap = await session.observation_engine.observe(
             hwnd=session.target_window.hwnd if session.target_window else None,
         )
@@ -81,6 +82,7 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         SecurityGate.validate_resource_uri(f"desktop://sessions/{clean_sid}/trace")
         session = bridge.get_session(clean_sid)
         if getattr(session, "trace_engine", None):
+            assert session.trace_engine is not None
             return json.dumps(session.trace_engine.timeline.to_dict(), indent=2)
         return json.dumps({"total_events": 0, "events": []}, indent=2)
 
@@ -96,6 +98,7 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         SecurityGate.validate_resource_uri(f"desktop://sessions/{clean_sid}/reality")
         session = bridge.get_session(clean_sid)
         target_hwnd = session.target_window.hwnd if session.target_window else None
+        assert session.observation_engine is not None, "Observation engine not initialized"
         snap = await session.observation_engine.observe_reality(hwnd=target_hwnd)
         return json.dumps(snap.to_dict(), indent=2)
 

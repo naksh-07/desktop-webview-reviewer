@@ -6,7 +6,7 @@ idempotent duplicate closure, lease expiration, and multi-session concurrency is
 
 import asyncio
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from runtime.state import (
     SessionLifecycleState,
@@ -105,7 +105,7 @@ class TestRuntimeSession(unittest.IsolatedAsyncioTestCase):
         await self.manager.activate_session(session.session_id)
 
         # Artificially age the heartbeat beyond 10s
-        session.last_heartbeat = datetime.utcnow() - timedelta(seconds=15)
+        session.last_heartbeat = datetime.now(timezone.utc) - timedelta(seconds=15)
         self.assertTrue(session.is_lease_expired())
 
         # Prune expired sessions

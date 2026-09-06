@@ -145,7 +145,7 @@ class RealityInspectorSpecialist(BaseSpecialistRuntime):
         else:
             status = SpecialistResultStatus.SUCCESS
             answer = (
-                f"Target window {hex(target_hwnd)} is physically visible on screen "
+                f"Target window {hex(target_hwnd or 0)} is physically visible on screen "
                 f"(bounds={window_forensics.get('bounds')}, foreground={is_foreground}, cloaked=False)."
             )
 

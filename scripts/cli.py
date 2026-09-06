@@ -16,6 +16,8 @@ SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SKILL_ROOT not in sys.path:
     sys.path.insert(0, SKILL_ROOT)
 
+from typing import Optional, List
+
 
 def main(argv: Optional[List[str]] = None) -> int:
     if argv is not None:
@@ -50,15 +52,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         elif cmd == "inspect":
             sys.argv.pop(1)
             from scripts.desktop_inspect import main as inspect_main
-            return inspect_main()
+            inspect_main()
+            return 0
         elif cmd == "screenshot":
             sys.argv.pop(1)
             from scripts.screenshot import main as screenshot_main
-            return screenshot_main()
+            screenshot_main()
+            return 0
         elif cmd == "trace":
             sys.argv.pop(1)
             from scripts.trace import main as trace_main
-            return trace_main()
+            trace_main()
+            return 0
         elif cmd in ("certify", "certification"):
             sys.argv.pop(1)
             from scripts.certify import main as certify_main

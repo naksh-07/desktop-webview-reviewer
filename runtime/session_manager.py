@@ -9,7 +9,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Set
 
 from runtime.state import (
@@ -124,14 +124,14 @@ class SessionState:
 
     def is_lease_expired(self, now: Optional[datetime] = None) -> bool:
         """Checks if session lease has expired without heartbeat."""
-        current_time = now or datetime.utcnow()
+        current_time = now or datetime.now(timezone.utc)
         elapsed = (current_time - self.last_heartbeat).total_seconds()
         return elapsed > self.lease_timeout_sec
 
     def transition_lifecycle(self, target: SessionLifecycleState) -> None:
         """Transitions to target lifecycle state. Enforces state machine validation."""
         self.lifecycle_state = self.lifecycle_state.transition_to(target)
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         logger.debug(f"Session {self.session_id} state transition -> {self.lifecycle_state.value}")
 
     def to_dict(self) -> Dict[str, Any]:
@@ -173,7 +173,7 @@ class SessionManager:
             if session_id in self._sessions:
                 raise ValueError(f"Session with ID '{session_id}' already exists")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             session = SessionState(
                 session_id=session_id,
                 lifecycle_state=SessionLifecycleState.CREATED,
@@ -265,8 +265,8 @@ class SessionManager:
         session = self.get_session(session_id)
         if session.is_closed:
             raise SessionNotFoundException(session_id)
-        session.last_heartbeat = datetime.utcnow()
-        session.updated_at = datetime.utcnow()
+        session.last_heartbeat = datetime.now(timezone.utc)
+        session.updated_at = datetime.now(timezone.utc)
 
     async def close_session(self, session_id: str, reason: str = "normal_closure") -> SessionState:
         """
@@ -292,7 +292,7 @@ class SessionManager:
 
             session.transition_lifecycle(SessionLifecycleState.CLOSED)
             session.connection_state = ConnectionState.DISCONNECTED
-            session.cleanup_state["closed_at"] = datetime.utcnow().isoformat()
+            session.cleanup_state["closed_at"] = datetime.now(timezone.utc).isoformat()
             session.cleanup_state["close_reason"] = reason
             logger.info(f"Closed session {session_id} cleanly ({reason})")
             return session
@@ -309,7 +309,7 @@ class SessionManager:
 
     async def prune_expired_sessions(self) -> List[str]:
         """Prunes sessions whose lease timeout has passed without a heartbeat."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         pruned: List[str] = []
         async with self._lock:
             for s_id, session in list(self._sessions.items()):

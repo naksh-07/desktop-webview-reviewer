@@ -71,6 +71,7 @@ async def desktop_assert_impl(
         actual_val: Optional[str] = None
         last_err: Optional[str] = None
         passed = False
+        assert session.actionability_engine is not None, "Actionability engine not initialized"
 
         while time.time() < deadline:
             try:

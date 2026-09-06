@@ -14,8 +14,10 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 try:
     import websockets
     import websockets.exceptions
+    WS_ConnectionClosed = websockets.exceptions.ConnectionClosed
 except ImportError:
     websockets = None
+    WS_ConnectionClosed = Exception
 
 from runtime.state import CDPConnectionStatus
 from runtime.errors import (
@@ -218,6 +220,9 @@ class WebSocketCDPTransport(ICDPTransport):
         if self._close_requested:
             return False
 
+        if websockets is None:
+            return False
+
         self._status = CDPConnectionStatus.RECONNECTING
         logger.warning(f"Attempting reconnection to CDP endpoint: {self._ws_url}")
 
@@ -342,7 +347,7 @@ class WebSocketCDPTransport(ICDPTransport):
             while self._status == CDPConnectionStatus.CONNECTED and self._websocket:
                 try:
                     raw_msg = await self._websocket.recv()
-                except (websockets.exceptions.ConnectionClosed, asyncio.CancelledError):
+                except (WS_ConnectionClosed, asyncio.CancelledError):
                     break
 
                 try:

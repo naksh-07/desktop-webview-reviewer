@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Optional, Any, Union
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Verdict(str, Enum):
     """The authoritative tripartite verdict model."""
@@ -71,7 +71,7 @@ class ActionReceipt:
     action_name: str
     target_ref: str
     executed: bool
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     duration_ms: float = 0.0
     error: Optional[str] = None
     post_snapshot: Optional[str] = None
@@ -343,7 +343,7 @@ class ObservationSnapshot:
     text_tree: str                 # Compact YAML / Markdown accessibility representation
     refs: Dict[str, ElementRef]    # Lookup table: "w1e4" -> ElementRef
     is_diff: bool = False
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 class IObservationEngine(ABC):
     @abstractmethod

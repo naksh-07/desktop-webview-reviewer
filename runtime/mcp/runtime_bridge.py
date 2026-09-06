@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 import time
+import dataclasses
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -186,11 +187,11 @@ class RuntimeBridge:
         session: SessionState,
         request: ActionRequest,
         include_snapshot: bool = True,
-    ) -> Tuple[ActionOutcome, Optional[str]]:
+    ) -> Tuple[ActionOutcome, Optional[str], bool]:
         """
         Executes an action with idempotency / deduplication check (Section 29)
         and action-observation fusion (Section 18).
-        Returns (ActionOutcome, post_snapshot_yaml).
+        Returns (ActionOutcome, post_snapshot_yaml, cached_bool).
         """
         # 1. Deduplication check
         if request.action_id in session.executed_actions:
@@ -208,6 +209,8 @@ class RuntimeBridge:
             cdp_port=session.target_endpoint.port if session.target_endpoint else None,
         )
 
+        assert session.action_engine is not None, "Action engine not initialized"
+        
         # 2. Execute action
         outcome: ActionOutcome = await session.action_engine.execute(request=request, verify=True)
         session.executed_actions[request.action_id] = outcome
@@ -220,11 +223,14 @@ class RuntimeBridge:
                 post_snapshot_str = outcome.post_snapshot.text_representation
             else:
                 try:
+                    assert session.observation_engine is not None, "Observation engine not initialized"
                     fresh_snap = await session.observation_engine.observe(
                         hwnd=session.target_window.hwnd if session.target_window else None,
                     )
-                    outcome.post_snapshot = fresh_snap
+                    outcome = dataclasses.replace(outcome, post_snapshot=fresh_snap)
                     post_snapshot_str = fresh_snap.text_representation
+                    session.executed_actions[request.action_id] = outcome
+                    session.last_outcome = outcome
                 except Exception as e:
                     logger.debug(f"Could not capture fused post-action snapshot: {e}")
 

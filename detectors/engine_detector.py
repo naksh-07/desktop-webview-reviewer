@@ -88,6 +88,7 @@ class EngineDetector:
         alt_tauri_conf = os.path.join(search_dir, "tauri.conf.json")
         if os.path.isfile(tauri_conf) or os.path.isfile(alt_tauri_conf):
             engine, fw = FrameworkRouter.resolve_framework("tauri")
+            assert engine is not None and fw is not None
             sig = DetectionSignal(
                 source="manifest",
                 indicator="tauri.conf.json",
@@ -102,6 +103,7 @@ class EngineDetector:
         wails_json = os.path.join(search_dir, "wails.json")
         if os.path.isfile(wails_json):
             engine, fw = FrameworkRouter.resolve_framework("wails")
+            assert engine is not None and fw is not None
             sig = DetectionSignal(
                 source="manifest",
                 indicator="wails.json",
@@ -154,6 +156,7 @@ class EngineDetector:
                         return "electron", "electron", "Found 'electron' dependency in package.json", signals
                     if "@tauri-apps/api" in deps or "@tauri-apps/cli" in deps:
                         engine, fw = FrameworkRouter.resolve_framework("tauri")
+                        assert engine is not None and fw is not None
                         sig = DetectionSignal(
                             source="manifest",
                             indicator="package.json:dependencies:@tauri-apps",
@@ -203,6 +206,7 @@ class EngineDetector:
                         return "qtwebengine", "qt", "Found QtWebEngine imports in Python script", signals
                     if "webview" in content and "create_window" in content:
                         engine, fw = FrameworkRouter.resolve_framework("pywebview")
+                        assert engine is not None and fw is not None
                         sig = DetectionSignal(
                             source="source_code",
                             indicator="python:import:pywebview",

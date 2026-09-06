@@ -160,7 +160,7 @@ class VerificationEngine:
                     "is_cloaked": native_obs.is_cloaked,
                     "is_responsive": native_obs.is_responsive,
                     "bounds": native_obs.bounds.to_dict(),
-                    "modal_dialogs": [m.to_dict() if hasattr(m, "to_dict") else m for m in native_obs.modal_dialogs],
+                    "modal_dialogs": [m if isinstance(m, dict) else getattr(m, "to_dict", lambda: m)() for m in native_obs.modal_dialogs],
                 },
             ))
 

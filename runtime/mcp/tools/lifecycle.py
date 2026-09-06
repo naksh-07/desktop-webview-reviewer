@@ -58,7 +58,7 @@ async def desktop_launch_impl(
                 pass
         if not adapter and engine_hint and engine_hint != "auto":
             try:
-                from adapters.registry import get_adapter
+                from adapters import get_adapter
                 adapter = get_adapter(engine_hint)
             except Exception:
                 pass
@@ -81,6 +81,7 @@ async def desktop_launch_impl(
             lease_timeout_sec=300,
         )
 
+        assert session.target_process is not None, "Target process is missing"
         pid = session.target_process.pid
 
         # 3. Discover native HWND
@@ -186,6 +187,7 @@ async def desktop_launch_impl(
         # 5. Capture initial snapshot
         initial_snapshot = ""
         try:
+            assert session.observation_engine is not None, "Observation engine not initialized"
             snap = await session.observation_engine.observe(hwnd=primary_hwnd if primary_hwnd else None)
             initial_snapshot = snap.text_representation
         except Exception as e:
@@ -312,6 +314,7 @@ async def desktop_attach_impl(
         # Capture initial snapshot
         initial_snapshot = ""
         try:
+            assert session.observation_engine is not None, "Observation engine not initialized"
             snap = await session.observation_engine.observe(hwnd=target_hwnd)
             initial_snapshot = snap.text_representation
         except Exception as e:

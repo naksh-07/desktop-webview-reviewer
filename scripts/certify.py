@@ -14,6 +14,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 try:
     if hasattr(sys.stdout, "reconfigure"):

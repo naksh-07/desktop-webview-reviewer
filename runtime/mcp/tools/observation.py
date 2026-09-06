@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Set
 from runtime.mcp.errors import map_exception_to_mcp_error
 from runtime.mcp.security import SecurityGate
 from runtime.mcp.runtime_bridge import RuntimeBridge
+from runtime.native_supervisor import NativeSupervisor
 
 logger = logging.getLogger("desktop_webview.mcp.tools.observation")
 
@@ -40,6 +41,7 @@ async def desktop_inspect_impl(
         target_hwnd = session.target_window.hwnd if session.target_window else None
         role_filter = {role} if role else None
 
+        assert session.observation_engine is not None, "Observation engine not initialized"
         snapshot = await session.observation_engine.observe(
             hwnd=target_hwnd,
             diff_only=diff_only,

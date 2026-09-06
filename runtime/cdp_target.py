@@ -12,7 +12,7 @@ import time
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Callable
 
 from runtime.state import TargetLifecycleState
 from runtime.cdp_transport import ICDPTransport

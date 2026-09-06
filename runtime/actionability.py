@@ -713,7 +713,7 @@ class ActionabilityEngine:
         }})()
         """
 
-    async def _query_element_state(self, script: str, frame_id: str) -> Optional[Dict[str, Any]]:
+    async def _query_element_state(self, script: str, frame_id: Optional[str]) -> Optional[Dict[str, Any]]:
         if not self.webview_core or not self.webview_core.is_connected:
             return None
         try:

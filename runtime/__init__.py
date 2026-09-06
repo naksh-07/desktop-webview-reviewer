@@ -11,6 +11,10 @@ from runtime.state import (
     Verdict,
     HealthState,
     DaemonLifecycleState,
+    TargetLifecycleState,
+    FrameLifecycleState,
+    AXFreshnessStatus,
+    CDPConnectionStatus,
 )
 from runtime.errors import (
     DesktopAutomationException,
@@ -33,6 +37,17 @@ from runtime.errors import (
     WindowCloakedException,
     NativeModalBlockedException,
     InvalidStateTransitionError,
+    CDPConnectionException,
+    CDPProtocolException,
+    CDPTimeoutException,
+    CDPTargetClosedException,
+    CDPTargetCrashedException,
+    CDPNavigationRaceException,
+    ExecutionContextDestroyedException,
+    FrameDetachedException,
+    FrameNotFoundException,
+    AXFreezeDetectedException,
+    CrossDomainFrameAccessException,
 )
 from runtime.references import Rect, ElementRef, ReferenceRegistry
 from runtime.capability import (

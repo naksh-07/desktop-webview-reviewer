@@ -161,7 +161,7 @@ class RealAppCertifier:
                 process_identity={},
                 hwnd_identity={},
                 webview_cdp_identity={},
-                capability_state=VerificationLevel.SUPPORTED.value,
+                capability_state=VerificationLevel.IMPLEMENTED.value,
                 interaction_result="SKIPPED",
                 settlement_result="SKIPPED",
                 physical_reality_result="SKIPPED",
@@ -185,7 +185,7 @@ class RealAppCertifier:
                 process_identity={},
                 hwnd_identity={},
                 webview_cdp_identity={},
-                capability_state=VerificationLevel.SUPPORTED.value,
+                capability_state=VerificationLevel.IMPLEMENTED.value,
                 interaction_result="SKIPPED",
                 settlement_result="SKIPPED",
                 physical_reality_result="SKIPPED",
@@ -198,6 +198,7 @@ class RealAppCertifier:
 
         port = ProcessLauncher.find_free_port(start_port=9280)
         adapter = get_adapter("qtwebengine")
+        assert adapter is not None, "QtWebEngine adapter not found"
         pid_file = self.output_dir / "anki_cert.pid"
         log_file = self.output_dir / "anki_cert.log"
         shot_file = self.output_dir / "anki_cert_screenshot.png"
@@ -341,7 +342,7 @@ class RealAppCertifier:
                 process_identity={},
                 hwnd_identity={},
                 webview_cdp_identity={},
-                capability_state=VerificationLevel.SUPPORTED.value,
+                capability_state=VerificationLevel.IMPLEMENTED.value,
                 interaction_result="SKIPPED",
                 settlement_result="SKIPPED",
                 physical_reality_result="SKIPPED",
@@ -364,7 +365,7 @@ class RealAppCertifier:
                 process_identity={},
                 hwnd_identity={},
                 webview_cdp_identity={},
-                capability_state=VerificationLevel.SUPPORTED.value,
+                capability_state=VerificationLevel.IMPLEMENTED.value,
                 interaction_result="SKIPPED",
                 settlement_result="SKIPPED",
                 physical_reality_result="SKIPPED",
@@ -377,6 +378,7 @@ class RealAppCertifier:
 
         port = ProcessLauncher.find_free_port(start_port=9290)
         adapter = get_adapter("electron")
+        assert adapter is not None, "Electron adapter not found"
         flags = [f"--remote-debugging-port={port}", "--remote-allow-origins=*"]
         if sys.platform == "win32" and npx_path.lower().endswith((".cmd", ".bat")):
             cmd = ["cmd.exe", "/c", npx_path, "electron"] + flags + [str(fixture_dir / "main.js")]
@@ -398,6 +400,7 @@ class RealAppCertifier:
         physical_res = "FAIL"
         assertion_res = "FAIL"
         evidence_res = "FAIL"
+        verdict = Verdict.FAIL.value
         session_corr = f"cert_electron_{proc.pid}"
         try:
             targets = adapter.discover_targets(port=port, timeout=12.0)
@@ -519,6 +522,7 @@ class RealAppCertifier:
         fixture_html = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "webview2_app.html"
         port = ProcessLauncher.find_free_port(start_port=9310)
         adapter = get_adapter("webview2")
+        assert adapter is not None, "WebView2 adapter not found"
         user_data = self.output_dir / "wv2_user_data"
         user_data.mkdir(parents=True, exist_ok=True)
 
@@ -638,6 +642,7 @@ class RealAppCertifier:
         t0 = time.perf_counter()
         os_name = f"{platform.system()} {platform.release()} ({platform.machine()})"
         adapter = get_adapter("chromium")
+        assert adapter is not None, "Chromium adapter unavailable"
         info = adapter.get_engine_info()
 
         return FrameworkCertificationEntry(
@@ -671,10 +676,11 @@ class RealAppCertifier:
         t0 = time.perf_counter()
         os_name = f"{platform.system()} {platform.release()} ({platform.machine()})"
         adapter = get_adapter("webkit")
+        assert adapter is not None, "WebKit adapter unavailable"
         info = adapter.get_engine_info()
 
         is_win = sys.platform == "win32"
-        cap_state = VerificationLevel.RUNTIME_UNAVAILABLE.value if is_win else VerificationLevel.SUPPORTED.value
+        cap_state = VerificationLevel.RUNTIME_UNAVAILABLE.value if is_win else VerificationLevel.IMPLEMENTED.value
 
         return FrameworkCertificationEntry(
             framework="WebKit / WKWebView",

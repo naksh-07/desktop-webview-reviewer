@@ -26,7 +26,7 @@ class CDPSession:
         if not self.ws_url:
             raise ValueError(f"Target '{target.id}' has no websocket_endpoint.")
 
-        self._websocket: Optional[websockets.WebSocketClientProtocol] = None
+        self._websocket: Any = None
         self._msg_id = 0
         self._pending_requests: Dict[int, asyncio.Future] = {}
         self._event_listeners: Dict[str, List[Callable[[dict], Any]]] = {}
@@ -44,6 +44,7 @@ class CDPSession:
             return
 
         logger.debug(f"Connecting to CDP endpoint: {self.ws_url}")
+        assert self.ws_url is not None
         # max_size=50MB to handle large screenshots or DOM dumps
         self._websocket = await websockets.connect(
             self.ws_url,

@@ -376,7 +376,7 @@ class NativeOSSupervisor:
         try:
             pid_var = wintypes.DWORD()
             w32.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_var))
-            return int(pid_var.value)
+            return pid_var.value
         except Exception:
             return 0
 

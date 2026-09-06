@@ -16,6 +16,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Optional, List
 
 SKILL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if SKILL_ROOT not in sys.path:
@@ -50,7 +51,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
         print(f"  Objective: {mission.objective}")
         print(f"  Declared Scope: {mission.declared_scope}")
         print(f"  Criteria Count: {len(mission.acceptance_criteria)}")
-        print(f"  Authority Digest: {mission._authority_digest[:16]}...")
+        digest = mission._authority_digest[:16] + "..." if mission._authority_digest else "None"
+        print(f"  Authority Digest: {digest}")
         return 0
     else:
         print(f"REJECTED: Mission '{mission.mission_id}' failed admission gate:", file=sys.stderr)

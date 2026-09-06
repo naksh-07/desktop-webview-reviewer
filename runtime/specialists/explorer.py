@@ -84,23 +84,27 @@ class ExplorerSpecialist(BaseSpecialistRuntime):
         wv_core = getattr(self.session_state, "webview_core", None)
         if wv_core and "desktop_query_targets" in self.delegation.permitted_tools or "desktop_inspect" in self.delegation.permitted_tools:
             try:
-                if hasattr(wv_core, "target_manager") and wv_core.target_manager:
-                    for t in wv_core.target_manager.get_all_targets():
+                t_mgr = getattr(wv_core, "target_manager", None)
+                if t_mgr:
+                    for t in t_mgr.get_all_targets():
                         webviews.append({
                             "target_id": t.target_id,
                             "title": self.sanitize_untrusted_content(t.title),
                             "url": self.sanitize_untrusted_content(t.url),
                             "type": t.target_type,
                         })
-                elif hasattr(wv_core, "active_target_id"):
-                    webviews.append({
-                        "target_id": wv_core.active_target_id,
-                        "title": self.sanitize_untrusted_content(getattr(wv_core, "active_title", "webview")),
-                        "url": self.sanitize_untrusted_content(getattr(wv_core, "active_url", "")),
-                    })
+                else:
+                    a_id = getattr(wv_core, "active_target_id", None)
+                    if a_id:
+                        webviews.append({
+                            "target_id": a_id,
+                            "title": self.sanitize_untrusted_content(getattr(wv_core, "active_title", "webview")),
+                            "url": self.sanitize_untrusted_content(getattr(wv_core, "active_url", "")),
+                        })
 
-                if hasattr(wv_core, "frame_manager") and wv_core.frame_manager:
-                    for f_id, frame in wv_core.frame_manager.get_all_frames().items():
+                f_mgr = getattr(wv_core, "frame_manager", None)
+                if f_mgr:
+                    for f_id, frame in f_mgr.get_all_frames().items():
                         frames.append({
                             "frame_id": f_id,
                             "url": self.sanitize_untrusted_content(frame.url),

@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional, Set
 
 from runtime.session_manager import TargetPlane
 from runtime.mcp.errors import map_exception_to_mcp_error, McpControlPlaneException, McpErrorCode
-from runtime.mcp.security import SecurityGate
+from runtime.mcp.security import SecurityGate, MAX_SERIALIZED_RESULT_SIZE
 from runtime.mcp.runtime_bridge import RuntimeBridge
 
 logger = logging.getLogger("desktop_webview.mcp.tools.evaluation")
@@ -135,9 +135,9 @@ async def desktop_evaluate_impl(
             safe_val = _sanitize_for_json(val)
             try:
                 serialized = json.dumps(safe_val)
-                if len(serialized) > SecurityGate.MAX_SERIALIZED_RESULT_SIZE:
+                if len(serialized) > MAX_SERIALIZED_RESULT_SIZE:
                     return {
-                        "result": serialized[:SecurityGate.MAX_SERIALIZED_RESULT_SIZE] + "... [truncated]",
+                        "result": serialized[:MAX_SERIALIZED_RESULT_SIZE] + "... [truncated]",
                         "exception_details": f"Evaluation result exceeded maximum allowed serialization size ({len(serialized)} bytes).",
                     }
             except Exception:

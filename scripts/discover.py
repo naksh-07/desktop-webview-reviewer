@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.capabilities import CapabilityRegistry
 from core.models import TargetCriteria
+from core.discovery import TargetDiscovery
 from detectors.engine_detector import EngineDetector
 
 
@@ -75,7 +76,7 @@ def main():
         print(f"Confidence:          {conf_str.upper()}")
         print(f"Platform:            {sys.platform}")
         print(f"Launch mode:         {launch_mode}")
-        print(f"Candidate targets:\n{TargetDiscovery.format_ranking_diagnostics(targets, criteria)}")
+        print(f"Candidate targets:\n{TargetDiscovery.format_ranking_diagnostics(targets, selected)}")
         print(f"Selected target:     None")
         print(f"Connection method:   HTTP Poll (http://{args.host}:{args.port}/json/list)")
         print(f"Failure stage:       target_selection")

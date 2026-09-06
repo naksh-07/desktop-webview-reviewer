@@ -50,6 +50,7 @@ async def desktop_handle_dialog_impl(
         )
 
         supervisor = session.native_supervisor
+        assert supervisor is not None, "Native supervisor not initialized"
         pid = session.target_process.pid if session.target_process else 0
 
         # 1. Search for Native Win32 Modal Dialogs (#32770 or modal dialogs belonging to PID)

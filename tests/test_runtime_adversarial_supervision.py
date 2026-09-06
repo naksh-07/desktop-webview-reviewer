@@ -80,7 +80,7 @@ class TestRuntimeAdversarialSupervision(unittest.TestCase):
             result2 = tm.validate_window_identity(hwnd=0x4000)
             self.assertFalse(result2.is_valid)
             self.assertEqual(result2.error_code, "WINDOW_NOT_FOUND")
-            self.assertIn("destroyed", result2.failure_reason.lower())
+            self.assertIn("destroyed", str(result2.failure_reason).lower())
 
     def test_pid_recycling_attack_detection(self):
         """
@@ -107,7 +107,7 @@ class TestRuntimeAdversarialSupervision(unittest.TestCase):
             )
             self.assertFalse(result.is_valid)
             self.assertEqual(result.error_code, "TARGET_MISMATCH")
-            self.assertIn("recycled", result.failure_reason.lower())
+            self.assertIn("recycled", str(result.failure_reason).lower())
 
     def test_minimized_window_is_not_interactable(self):
         """

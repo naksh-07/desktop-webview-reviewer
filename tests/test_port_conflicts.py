@@ -8,10 +8,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 
 try:
-    from .env_config import get_qt_skill_dir, get_python_exe
+    from .env_config import get_skill_dir, get_python_exe
 except ImportError:
-    from env_config import get_qt_skill_dir, get_python_exe
-SKILL_DIR = str(get_qt_skill_dir())
+    from env_config import get_skill_dir, get_python_exe
+SKILL_DIR = str(get_skill_dir())
 PYTHON_EXE = get_python_exe()
 
 
@@ -107,19 +107,12 @@ def run_script_with_timeout(script_args, timeout=10, cwd=None):
 def test_timeout_no_port():
     print("\n=======================================================")
     print("--- Test 1.1: Discovery Timeout on Unbound Port 9222 ---")
-    discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-    
-    code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=3)
-"""
-    ret, stdout, stderr = run_script_with_timeout(["-c", code], timeout=8)
+    discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+    ret, stdout, stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "3"], timeout=8)
     print(f"Return code: {ret}")
     print(f"Stdout:\n{stdout.strip()}")
     assert ret == 1, f"Expected returncode 1 on timeout, got {ret}"
-    assert "Timed out waiting for QtWebEngine debugging endpoint" in stdout, "Expected timeout error message"
+    assert "No debugging endpoints found" in stdout, "Expected timeout error message"
     print(">>> RESULT: PASS (Unbound port triggers clean timeout exit code 1 without unhandled stacktrace).")
 
 def test_occupied_port_invalid_json():
@@ -128,18 +121,12 @@ def test_occupied_port_invalid_json():
     server = start_mock_server(9222, "invalid_json")
     time.sleep(0.3)
     try:
-        discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-        code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=3)
-"""
-        ret, stdout, stderr = run_script_with_timeout(["-c", code], timeout=8)
+        discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+        ret, stdout, stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "3"], timeout=8)
         print(f"Return code: {ret}")
         print(f"Stdout:\n{stdout.strip()}")
         assert ret == 1, f"Expected returncode 1 on timeout, got {ret}"
-        assert ("Error checking targets:" in stdout or "Timed out" in stdout)
+        assert "No debugging endpoints found" in stdout
         print(">>> RESULT: PASS (Malformed JSON handled gracefully by generic exception handler and retries to timeout).")
     finally:
         server.shutdown()
@@ -152,18 +139,12 @@ def test_occupied_port_empty_list():
     server = start_mock_server(9222, "empty_list")
     time.sleep(0.3)
     try:
-        discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-        code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=3)
-"""
-        ret, stdout, stderr = run_script_with_timeout(["-c", code], timeout=8)
+        discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+        ret, stdout, stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "3"], timeout=8)
         print(f"Return code: {ret}")
         print(f"Stdout:\n{stdout.strip()}")
         assert ret == 1, f"Expected returncode 1 on timeout, got {ret}"
-        assert "Endpoint responded, but no targets are available yet" in stdout
+        assert "No debugging endpoints found" in stdout
         print(">>> RESULT: PASS (Empty list detected with explicit informative log message and cleanly timed out).")
     finally:
         server.shutdown()
@@ -176,18 +157,12 @@ def test_occupied_port_non_page_targets():
     server = start_mock_server(9222, "non_page_target")
     time.sleep(0.3)
     try:
-        discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-        code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=3)
-"""
-        ret, stdout, stderr = run_script_with_timeout(["-c", code], timeout=8)
+        discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+        ret, stdout, stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "3"], timeout=8)
         print(f"Return code: {ret}")
         print(f"Stdout:\n{stdout.strip()}")
         assert ret == 1, f"Expected returncode 1 on timeout, got {ret}"
-        assert "No 'page' target with a WebSocket URL found yet" in stdout
+        assert "No candidate target matched criteria" in stdout
         print(">>> RESULT: PASS (Non-page targets correctly filtered out; retries cleanly).")
     finally:
         server.shutdown()
@@ -201,14 +176,8 @@ def test_occupied_port_http_errors():
         server = start_mock_server(9222, status_mode)
         time.sleep(0.3)
         try:
-            discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-            code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=2)
-"""
-            ret, stdout, stderr = run_script_with_timeout(["-c", code], timeout=6)
+            discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+            ret, stdout, stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "2"], timeout=6)
             print(f"[{status_mode}] Return code: {ret}")
             assert ret == 1, f"Expected returncode 1 on timeout for {status_mode}, got {ret}"
             print(f"[{status_mode}] >>> PASS: HTTP status error handled silently via URLError catch.")
@@ -223,14 +192,8 @@ def test_occupied_port_raw_garbage_tcp():
     stop_event, sock = start_raw_garbage_tcp_server(9222)
     time.sleep(0.3)
     try:
-        discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-        code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=2)
-"""
-        ret, stdout, stderr = run_script_with_timeout(["-c", code], timeout=6)
+        discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+        ret, stdout, stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "2"], timeout=6)
         print(f"Return code: {ret}")
         print(f"Stdout:\n{stdout.strip()}")
         assert ret == 1, f"Expected returncode 1 on timeout, got {ret}"
@@ -246,40 +209,35 @@ def test_launch_with_occupied_port():
     server = start_mock_server(9222, "empty_list")
     time.sleep(0.3)
     
-    launch_script = os.path.join(SKILL_DIR, "scripts", "launch-app.py")
+    launch_script = os.path.join(SKILL_DIR, "scripts", "launch.py")
     test_app = os.path.join(SKILL_DIR, "examples", "test_app.py")
-    stop_script = os.path.join(SKILL_DIR, "scripts", "stop-app.py")
+    stop_script = os.path.join(SKILL_DIR, "scripts", "stop.py")
     
     try:
         # 1. Launch Qt app while 9222 is occupied
         ret, stdout, stderr = run_script_with_timeout([launch_script, test_app], timeout=8)
         print(f"Launch return code: {ret}")
         print(f"Launch stdout:\n{stdout.strip()}")
-        assert ret == 0, "launch-app.py should successfully spawn process even if port 9222 is taken"
+        assert ret == 0, "launch.py should successfully spawn process even if port 9222 is taken"
         
-        # 2. Verify PID recorded
-        assert os.path.exists("qt_app.pid"), "qt_app.pid should exist"
-        with open("qt_app.pid", "r") as f:
+        # 2. Verify PID recorded (launch.py writes to desktop_app.pid by default)
+        assert os.path.exists("desktop_app.pid") or os.path.exists("qt_app.pid"), "PID file should exist"
+        pid_file = "desktop_app.pid" if os.path.exists("desktop_app.pid") else "qt_app.pid"
+        with open(pid_file, "r") as f:
             pid = int(f.read().strip())
         print(f"Spawned Qt App PID: {pid}")
         
         # 3. Discovery fails because mock server returns empty list
-        discover_script = os.path.join(SKILL_DIR, "scripts", "discover-target.py")
-        code = f"""
-import sys
-from importlib.machinery import SourceFileLoader
-dt = SourceFileLoader('discover_target', r'{discover_script}').load_module()
-dt.discover_target(port=9222, timeout=3)
-"""
-        d_ret, d_stdout, d_stderr = run_script_with_timeout(["-c", code], timeout=8)
+        discover_script = os.path.join(SKILL_DIR, "scripts", "discover.py")
+        d_ret, d_stdout, d_stderr = run_script_with_timeout([discover_script, "--port", "9222", "--timeout", "3"], timeout=8)
         print(f"Discovery return code under port conflict: {d_ret}")
         assert d_ret == 1, "Discovery should fail/timeout when port 9222 is hijacked"
         
-        # 4. Clean up Qt app using stop-app.py
+        # 4. Clean up Qt app using stop.py
         s_ret, s_stdout, s_stderr = run_script_with_timeout([stop_script, str(pid)], timeout=8)
         print(f"Stop app return code: {s_ret}")
         print(f"Stop app stdout:\n{s_stdout.strip()}")
-        assert not os.path.exists("qt_app.pid"), "qt_app.pid should be removed"
+        assert not os.path.exists(pid_file), "pid file should be removed"
         print(">>> RESULT: PASS (App launched, conflict detected, process cleanly isolated and stopped).")
     finally:
         server.shutdown()

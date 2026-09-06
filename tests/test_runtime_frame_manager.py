@@ -112,6 +112,7 @@ class TestFrameManager(unittest.IsolatedAsyncioTestCase):
         # Epoch must increment to 2
         self.assertEqual(self.registry.current_epoch, 2)
         root = self.frame_manager.root_frame
+        self.assertIsNotNone(root)
         self.assertEqual(root.url, "http://127.0.0.1:8000/page2.html")
         self.assertEqual(root.loader_id, "loader_2")
 

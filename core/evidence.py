@@ -116,6 +116,7 @@ class EvidenceCollector:
     def evaluate_verdict(
         window_forensics: Optional[WindowForensics],
         assertions: Optional[List[Dict[str, Any]]] = None,
+        actions: Optional[List[Dict[str, Any]]] = None,
         process_ownership: Optional[ProcessOwnership] = None,
         screenshots: Optional[Dict[str, ScreenshotMetadata]] = None,
         require_visible_gui: bool = True,

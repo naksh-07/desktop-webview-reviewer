@@ -346,7 +346,7 @@ class ReviewMissionOrchestrator:
                 if can_recover:
                     logger.info(f"Attempting bounded recovery for category {diagnosis.failure_category.value} (attempt {recoveries_count + 1}/{mission.max_recoveries})...")
                     try:
-                        rec_success, rec_record = await self.recovery_engine.attempt_recovery(
+                        rec_success, rec_record = await self.recovery_engine.execute_recovery(
                             diagnosis=diagnosis,
                             session_state=session_state,
                             timeout_sec=min(15.0, max(1.0, deadline - time.time())),

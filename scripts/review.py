@@ -22,6 +22,7 @@ from core.evidence import EvidenceCollector
 from core.models import (
     ProcessOwnership,
     ScreenshotType,
+    ScreenshotMetadata,
     Target,
     Verdict,
     VerificationLevel,

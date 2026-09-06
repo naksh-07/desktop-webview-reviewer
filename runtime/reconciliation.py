@@ -231,29 +231,25 @@ class RealityReconciler:
 
         # 1. Evaluate Truth Hierarchy window-level contradictions
         if is_cloaked and has_visible_web:
-            snapshot.contradictions.append({
-                "type": "CLOAKED_BUT_DOM_VISIBLE",
-                "description": "Webview DOM reports elements are visible, but Native Window is cloaked by DWM (Truth Hierarchy: Compositor > Web)",
-            })
+            snapshot.contradictions.append(
+                "CLOAKED_BUT_DOM_VISIBLE: Webview DOM reports elements are visible, but Native Window is cloaked by DWM (Truth Hierarchy: Compositor > Web)"
+            )
         if is_minimized and has_visible_web:
-            snapshot.contradictions.append({
-                "type": "MINIMIZED_BUT_DOM_VISIBLE",
-                "description": "Webview DOM reports elements are visible, but Native Window is minimized (Truth Hierarchy: Compositor > Web)",
-            })
+            snapshot.contradictions.append(
+                "MINIMIZED_BUT_DOM_VISIBLE: Webview DOM reports elements are visible, but Native Window is minimized (Truth Hierarchy: Compositor > Web)"
+            )
         if not is_native_vis and has_visible_web:
-            snapshot.contradictions.append({
-                "type": "HIDDEN_BUT_DOM_VISIBLE",
-                "description": "Webview DOM reports elements are visible, but Native Window is hidden (Truth Hierarchy: Native > Web)",
-            })
+            snapshot.contradictions.append(
+                "HIDDEN_BUT_DOM_VISIBLE: Webview DOM reports elements are visible, but Native Window is hidden (Truth Hierarchy: Native > Web)"
+            )
 
         # 2. ContextReconciler integration for base spatial alignment
         if native_obs and web_obs and isinstance(native_obs, NativeObservation) and isinstance(web_obs, WebObservation):
             rec_obs = self.context_reconciler.reconcile(native_obs, web_obs)
             for c_str in rec_obs.contradictions:
-                snapshot.contradictions.append({
-                    "type": "SPATIAL_CONTRADICTION",
-                    "description": c_str,
-                })
+                snapshot.contradictions.append(
+                    f"SPATIAL_CONTRADICTION: {c_str}"
+                )
 
         # Active modals to check for physical occlusion
         active_modals = list(modal_windows or [])
@@ -311,12 +307,9 @@ class RealityReconciler:
                         inter = m_bounds.intersection(elem_bounds)
                         if inter is not None and inter.area > 0:
                             is_modal_occluded = True
-                            snapshot.contradictions.append({
-                                "type": "OCCLUDED_BY_MODAL",
-                                "description": f"Target {ref} is occluded by modal window ({getattr(m, 'title', hex(getattr(m, 'hwnd', 0)))})",
-                                "target_reference": ref,
-                                "modal_hwnd": getattr(m, "hwnd", None),
-                            })
+                            snapshot.contradictions.append(
+                                f"OCCLUDED_BY_MODAL: Target {ref} is occluded by modal window ({getattr(m, 'title', hex(getattr(m, 'hwnd', 0)))}) (Modal HWND: {getattr(m, 'hwnd', None)})"
+                            )
                             break
 
                 # Compositor props derived from native host, DWM, and modal occlusion
@@ -425,12 +418,9 @@ class RealityReconciler:
                         inter = m_bounds.intersection(elem_bounds)
                         if inter is not None and inter.area > 0:
                             is_modal_occluded = True
-                            snapshot.contradictions.append({
-                                "type": "OCCLUDED_BY_MODAL",
-                                "description": f"Native target {ref} is occluded by modal dialog ({getattr(m, 'title', hex(getattr(m, 'hwnd', 0)))})",
-                                "target_reference": ref,
-                                "modal_hwnd": getattr(m, "hwnd", None),
-                            })
+                            snapshot.contradictions.append(
+                                f"OCCLUDED_BY_MODAL: Native target {ref} is occluded by modal dialog ({getattr(m, 'title', hex(getattr(m, 'hwnd', 0)))}) (Modal HWND: {getattr(m, 'hwnd', None)})"
+                            )
                             break
 
                 is_dom_occluded = elem_vis.physically_occluded if elem_vis else False
