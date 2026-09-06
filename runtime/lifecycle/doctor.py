@@ -268,6 +268,44 @@ class LifecycleDoctor:
                 )
             )
 
+        # Check 9: Antigravity Correlation Bridge status (Milestone 2.1 Prompt 3)
+        try:
+            from runtime.experience.antigravity import AntigravityCorrelationBridge
+            bridge = AntigravityCorrelationBridge.get_default_bridge()
+            bstatus = bridge.get_status()
+            bridge_details = bstatus.to_dict()
+
+            if bstatus.enabled:
+                checks.append(
+                    DoctorCheckResult(
+                        name="antigravity_bridge",
+                        status="PASS",
+                        message=(
+                            f"Antigravity correlation bridge enabled "
+                            f"(events accepted: {bstatus.events_accepted}, correlations: {bstatus.correlation_records}, "
+                            f"privacy blocks: {bstatus.privacy_violations_blocked})."
+                        ),
+                        details=bridge_details,
+                    )
+                )
+            else:
+                checks.append(
+                    DoctorCheckResult(
+                        name="antigravity_bridge",
+                        status="INFO",
+                        message="Antigravity correlation bridge is installed but disabled via configuration.",
+                        details=bridge_details,
+                    )
+                )
+        except Exception as e:
+            checks.append(
+                DoctorCheckResult(
+                    name="antigravity_bridge",
+                    status="INFO",
+                    message=f"Antigravity correlation bridge not configured or unavailable: {e}",
+                )
+            )
+
         return DoctorReport(
             passed=overall_passed,
             installed_version=vinfo.product_version,

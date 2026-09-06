@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple
 
 logger = logging.getLogger("desktop_webview.experience.schema")
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 MIGRATION_V1_STATEMENTS: List[str] = [
     # 1. Schema Migrations Log
@@ -244,9 +244,147 @@ MIGRATION_V2_STATEMENTS: List[str] = [
     "CREATE INDEX IF NOT EXISTS idx_recovery_timestamp ON recovery_attempts(timestamp);",
 ]
 
+MIGRATION_V3_STATEMENTS: List[str] = [
+    # 12. Agent Sessions (Milestone 2.1 Prompt 3)
+    """
+    CREATE TABLE IF NOT EXISTS agent_sessions (
+        agent_session_id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        agent_id TEXT,
+        workspace_id TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL,
+        metadata_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_sess_conv ON agent_sessions(conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_sess_started ON agent_sessions(started_at);",
+
+    # 13. Agent Turns
+    """
+    CREATE TABLE IF NOT EXISTS agent_turns (
+        turn_id TEXT PRIMARY KEY,
+        agent_session_id TEXT NOT NULL,
+        conversation_id TEXT,
+        parent_turn_id TEXT,
+        step_index INTEGER,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        status TEXT NOT NULL,
+        metadata_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_turns_sess ON agent_turns(agent_session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_turns_conv ON agent_turns(conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_turns_ts ON agent_turns(timestamp);",
+
+    # 14. Agent Tool Calls
+    """
+    CREATE TABLE IF NOT EXISTS agent_tool_calls (
+        tool_call_id TEXT PRIMARY KEY,
+        turn_id TEXT,
+        agent_session_id TEXT,
+        conversation_id TEXT,
+        tool_name TEXT NOT NULL,
+        tool_category TEXT NOT NULL,
+        success INTEGER NOT NULL,
+        error_class TEXT,
+        duration_ms REAL,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        safe_summary_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_tools_sess ON agent_tool_calls(agent_session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_tools_conv ON agent_tool_calls(conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_tools_name ON agent_tool_calls(tool_name);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_tools_cat ON agent_tool_calls(tool_category);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_tools_ts ON agent_tool_calls(timestamp);",
+
+    # 15. Agent Subagents
+    """
+    CREATE TABLE IF NOT EXISTS agent_subagents (
+        subagent_id TEXT PRIMARY KEY,
+        parent_agent_id TEXT,
+        delegation_id TEXT,
+        conversation_id TEXT,
+        agent_session_id TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        completed_at TEXT,
+        metadata_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_sub_parent ON agent_subagents(parent_agent_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_sub_conv ON agent_subagents(conversation_id);",
+
+    # 16. Agent Artifacts
+    """
+    CREATE TABLE IF NOT EXISTS agent_artifacts (
+        artifact_id TEXT PRIMARY KEY,
+        artifact_type TEXT NOT NULL,
+        safe_reference TEXT NOT NULL,
+        agent_session_id TEXT,
+        turn_id TEXT,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        metadata_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_art_sess ON agent_artifacts(agent_session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_art_type ON agent_artifacts(artifact_type);",
+
+    # 17. Agent Corrections
+    """
+    CREATE TABLE IF NOT EXISTS agent_corrections (
+        correction_id TEXT PRIMARY KEY,
+        correction_type TEXT NOT NULL,
+        agent_session_id TEXT,
+        conversation_id TEXT,
+        turn_id TEXT,
+        tool_call_id TEXT,
+        related_dwr_session_id TEXT,
+        related_action_id TEXT,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        classification_details_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_corr_type ON agent_corrections(correction_type);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_corr_dwr_sess ON agent_corrections(related_dwr_session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_agent_corr_ts ON agent_corrections(timestamp);",
+
+    # 18. DWR <-> Antigravity Correlations
+    """
+    CREATE TABLE IF NOT EXISTS agent_dwr_correlations (
+        correlation_id TEXT PRIMARY KEY,
+        confidence TEXT NOT NULL,
+        agent_session_id TEXT,
+        conversation_id TEXT,
+        turn_id TEXT,
+        tool_call_id TEXT,
+        dwr_session_id TEXT,
+        dwr_mission_id TEXT,
+        dwr_action_id TEXT,
+        correlation_source TEXT NOT NULL,
+        timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        metadata_json TEXT,
+        FOREIGN KEY (dwr_session_id) REFERENCES review_sessions(session_id) ON DELETE CASCADE
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_corr_dwr_sess ON agent_dwr_correlations(dwr_session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_corr_dwr_act ON agent_dwr_correlations(dwr_action_id);",
+    "CREATE INDEX IF NOT EXISTS idx_corr_conv ON agent_dwr_correlations(conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_corr_conf ON agent_dwr_correlations(confidence);",
+    "CREATE INDEX IF NOT EXISTS idx_corr_ts ON agent_dwr_correlations(timestamp);",
+]
+
 MIGRATIONS: Dict[int, Tuple[str, List[str]]] = {
     1: ("Baseline Experience Store schema v1", MIGRATION_V1_STATEMENTS),
     2: ("Failure normalization and recovery attempt tracking schema v2", MIGRATION_V2_STATEMENTS),
+    3: ("Antigravity agent experience and DWR correlation bridge schema v3", MIGRATION_V3_STATEMENTS),
 }
 
 

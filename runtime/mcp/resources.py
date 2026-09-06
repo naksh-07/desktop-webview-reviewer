@@ -334,5 +334,25 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         from runtime.experience import ExperienceStore
         exp_store = ExperienceStore.get_default_store()
         health = exp_store.get_health_report()
-        return json.dumps(health.to_dict(), indent=2)
+        payload = health.to_dict()
+
+        try:
+            from runtime.experience.antigravity import AntigravityCorrelationBridge
+            bridge = AntigravityCorrelationBridge.get_default_bridge()
+            bstatus = bridge.get_status()
+            counts = exp_store.get_record_counts()
+            payload["antigravity_bridge"] = {
+                "enabled": bstatus.enabled,
+                "installed_or_configured": bstatus.installed_or_configured,
+                "last_event_timestamp": bstatus.last_event_timestamp,
+                "agent_sessions": counts.get("agent_sessions", 0),
+                "agent_tool_calls": counts.get("agent_tool_calls", 0),
+                "correlations": counts.get("agent_dwr_correlations", 0),
+                "corrections": counts.get("agent_corrections", 0),
+                "privacy_violations_blocked": bstatus.privacy_violations_blocked,
+            }
+        except Exception:
+            pass
+
+        return json.dumps(payload, indent=2)
 

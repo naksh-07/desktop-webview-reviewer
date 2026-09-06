@@ -81,8 +81,9 @@ class ExperienceIntegrationAdapter:
     _default_adapter: Optional[ExperienceIntegrationAdapter] = None
     _adapter_lock: threading.Lock = threading.Lock()
 
-    def __init__(self, store: Optional[ExperienceStore] = None):
+    def __init__(self, store: Optional[ExperienceStore] = None, bridge: Optional[Any] = None):
         self._store = store
+        self._bridge = bridge
         self._lock = threading.RLock()
 
     @classmethod
@@ -97,6 +98,42 @@ class ExperienceIntegrationAdapter:
         if self._store is None:
             self._store = ExperienceStore.get_default_store()
         return self._store
+
+    def _get_bridge(self) -> Optional[Any]:
+        if self._bridge is not None:
+            return self._bridge
+        try:
+            from runtime.experience.antigravity import AntigravityCorrelationBridge
+            return AntigravityCorrelationBridge.get_default_bridge()
+        except Exception:
+            return None
+
+    def _notify_bridge_session(self, session_id: str, project_id: Optional[str] = None, conversation_id: Optional[str] = None) -> None:
+        """Notifies optional Antigravity correlation bridge of DWR session lifecycle."""
+        try:
+            bridge = self._get_bridge()
+            if bridge:
+                bridge.on_dwr_session_started(session_id, project_id=project_id, conversation_id=conversation_id)
+        except Exception as e:
+            logger.debug("Antigravity bridge session notification skipped: %s", e)
+
+    def _notify_bridge_mission(self, mission_id: str, session_id: str) -> None:
+        """Notifies optional Antigravity correlation bridge of DWR mission lifecycle."""
+        try:
+            bridge = self._get_bridge()
+            if bridge:
+                bridge.on_dwr_mission_admitted(mission_id, session_id=session_id)
+        except Exception as e:
+            logger.debug("Antigravity bridge mission notification skipped: %s", e)
+
+    def _notify_bridge_action(self, action_id: str, session_id: str, duration_ms: Optional[float] = None, action_type: Optional[str] = None) -> None:
+        """Notifies optional Antigravity correlation bridge of DWR action settlement."""
+        try:
+            bridge = self._get_bridge()
+            if bridge:
+                bridge.on_dwr_action_settled(action_id, session_id, duration_ms=duration_ms, action_type=action_type)
+        except Exception as e:
+            logger.debug("Antigravity bridge action notification skipped: %s", e)
 
     # -------------------------------------------------------------------------
     # Session Lifecycle Integration
@@ -165,7 +202,13 @@ class ExperienceIntegrationAdapter:
                 scope=ExperienceScope.SESSION,
                 metadata=metadata or {},
             )
-            return self.store.record_session(record)
+            rec = self.store.record_session(record)
+            self._notify_bridge_session(
+                session_id=sid,
+                project_id=project_id,
+                conversation_id=(metadata.get("conversation_id") if isinstance(metadata, dict) else None),
+            )
+            return rec
         except Exception as e:
             logger.warning("Graceful degradation: failed to persist session creation: %s", e)
             return None
@@ -357,7 +400,9 @@ class ExperienceIntegrationAdapter:
                 status="ADMITTED",
                 metadata=meta,
             )
-            return self.store.record_mission(record)
+            rec = self.store.record_mission(record)
+            self._notify_bridge_mission(mission_id=mid, session_id=sid)
+            return rec
         except Exception as e:
             logger.warning("Graceful degradation: failed to persist admitted mission: %s", e)
             return None
@@ -599,7 +644,14 @@ class ExperienceIntegrationAdapter:
                     "verdict": getattr(outcome, "verdict", None) if isinstance(getattr(outcome, "verdict", None), str) else None,
                 },
             )
-            return self.store.record_action_reference(record)
+            rec = self.store.record_action_reference(record)
+            self._notify_bridge_action(
+                action_id=record.action_id,
+                session_id=record.session_id,
+                duration_ms=record.duration_ms,
+                action_type=record.action_type,
+            )
+            return rec
         except Exception as e:
             logger.warning("Graceful degradation: failed to record action settled %s: %s", getattr(action_request, "action_id", "unknown"), e)
             return None

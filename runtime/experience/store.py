@@ -48,6 +48,19 @@ from runtime.experience.models import (
     VerificationDistribution,
     validate_scope_promotion,
 )
+from runtime.experience.antigravity.contracts import (
+    CorrelationConfidence,
+    UserCorrectionType,
+)
+from runtime.experience.antigravity.models import (
+    AgentArtifactRecord,
+    AgentCorrectionRecord,
+    AgentDwrCorrelationRecord,
+    AgentSessionRecord,
+    AgentSubagentRecord,
+    AgentToolCallRecord,
+    AgentTurnRecord,
+)
 from runtime.experience.privacy import PrivacyEnforcer, PrivacyViolationException
 from runtime.experience.schema import (
     CURRENT_SCHEMA_VERSION,
@@ -586,6 +599,297 @@ class ExperienceStore:
                 logger.error("Failed to record recovery attempt %s: %s", record.recovery_id, e)
                 if not self.config.fail_safe_mode:
                     raise ExperiencePersistenceException(f"Failed to record recovery attempt: {e}") from e
+                return None
+
+    # -------------------------------------------------------------------------
+    # Antigravity Agent Record Operations (Milestone 2.1 Prompt 3)
+    # -------------------------------------------------------------------------
+
+    def record_agent_session(self, record: AgentSessionRecord) -> Optional[AgentSessionRecord]:
+        """Persists or updates an Antigravity agent session record."""
+        clean_metadata = PrivacyEnforcer.check_and_sanitize(record.metadata, context="agent_session.metadata")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_sessions (
+                        agent_session_id, conversation_id, agent_id, workspace_id,
+                        started_at, completed_at, status, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(agent_session_id) DO UPDATE SET
+                        completed_at = excluded.completed_at,
+                        status = excluded.status,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.agent_session_id,
+                        record.conversation_id,
+                        record.agent_id,
+                        record.workspace_id,
+                        record.started_at,
+                        record.completed_at,
+                        record.status,
+                        json.dumps(clean_metadata, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent session %s: %s", record.agent_session_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent session: {e}") from e
+                return None
+
+    def record_agent_turn(self, record: AgentTurnRecord) -> Optional[AgentTurnRecord]:
+        """Persists or updates an Antigravity agent turn record."""
+        clean_metadata = PrivacyEnforcer.check_and_sanitize(record.metadata, context="agent_turn.metadata")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_turns (
+                        turn_id, agent_session_id, conversation_id, parent_turn_id,
+                        step_index, timestamp, iso_timestamp, status, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(turn_id) DO UPDATE SET
+                        status = excluded.status,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.turn_id,
+                        record.agent_session_id,
+                        record.conversation_id,
+                        record.parent_turn_id,
+                        record.step_index,
+                        record.timestamp,
+                        record.iso_timestamp,
+                        record.status,
+                        json.dumps(clean_metadata, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent turn %s: %s", record.turn_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent turn: {e}") from e
+                return None
+
+    def record_agent_tool_call(self, record: AgentToolCallRecord) -> Optional[AgentToolCallRecord]:
+        """Persists an Antigravity tool call with sanitized structural summary."""
+        clean_summary = PrivacyEnforcer.check_and_sanitize(record.safe_summary, context="agent_tool_call.safe_summary")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_tool_calls (
+                        tool_call_id, turn_id, agent_session_id, conversation_id,
+                        tool_name, tool_category, success, error_class, duration_ms,
+                        timestamp, iso_timestamp, safe_summary_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(tool_call_id) DO UPDATE SET
+                        success = excluded.success,
+                        error_class = excluded.error_class,
+                        duration_ms = excluded.duration_ms,
+                        safe_summary_json = excluded.safe_summary_json;
+                    """,
+                    (
+                        record.tool_call_id,
+                        record.turn_id,
+                        record.agent_session_id,
+                        record.conversation_id,
+                        record.tool_name,
+                        record.tool_category,
+                        1 if record.success else 0,
+                        record.error_class,
+                        record.duration_ms,
+                        record.timestamp,
+                        record.iso_timestamp,
+                        json.dumps(clean_summary, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent tool call %s: %s", record.tool_call_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent tool call: {e}") from e
+                return None
+
+    def record_agent_subagent(self, record: AgentSubagentRecord) -> Optional[AgentSubagentRecord]:
+        """Persists an Antigravity subagent delegation record."""
+        clean_metadata = PrivacyEnforcer.check_and_sanitize(record.metadata, context="agent_subagent.metadata")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_subagents (
+                        subagent_id, parent_agent_id, delegation_id, conversation_id,
+                        agent_session_id, status, created_at, completed_at, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(subagent_id) DO UPDATE SET
+                        status = excluded.status,
+                        completed_at = excluded.completed_at,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.subagent_id,
+                        record.parent_agent_id,
+                        record.delegation_id,
+                        record.conversation_id,
+                        record.agent_session_id,
+                        record.status,
+                        record.created_at,
+                        record.completed_at,
+                        json.dumps(clean_metadata, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent subagent %s: %s", record.subagent_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent subagent: {e}") from e
+                return None
+
+    def record_agent_artifact(self, record: AgentArtifactRecord) -> Optional[AgentArtifactRecord]:
+        """Persists a safe Antigravity artifact reference."""
+        clean_metadata = PrivacyEnforcer.check_and_sanitize(record.metadata, context="agent_artifact.metadata")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_artifacts (
+                        artifact_id, artifact_type, safe_reference, agent_session_id,
+                        turn_id, timestamp, iso_timestamp, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(artifact_id) DO UPDATE SET
+                        safe_reference = excluded.safe_reference,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.artifact_id,
+                        record.artifact_type,
+                        record.safe_reference,
+                        record.agent_session_id,
+                        record.turn_id,
+                        record.timestamp,
+                        record.iso_timestamp,
+                        json.dumps(clean_metadata, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent artifact %s: %s", record.artifact_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent artifact: {e}") from e
+                return None
+
+    def record_agent_correction(self, record: AgentCorrectionRecord) -> Optional[AgentCorrectionRecord]:
+        """Persists a structured user or agent correction classification."""
+        clean_details = PrivacyEnforcer.check_and_sanitize(record.classification_details, context="agent_correction.details")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_corrections (
+                        correction_id, correction_type, agent_session_id, conversation_id,
+                        turn_id, tool_call_id, related_dwr_session_id, related_action_id,
+                        timestamp, iso_timestamp, classification_details_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(correction_id) DO UPDATE SET
+                        classification_details_json = excluded.classification_details_json;
+                    """,
+                    (
+                        record.correction_id,
+                        record.correction_type,
+                        record.agent_session_id,
+                        record.conversation_id,
+                        record.turn_id,
+                        record.tool_call_id,
+                        record.related_dwr_session_id,
+                        record.related_action_id,
+                        record.timestamp,
+                        record.iso_timestamp,
+                        json.dumps(clean_details, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent correction %s: %s", record.correction_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent correction: {e}") from e
+                return None
+
+    def record_agent_correlation(self, record: AgentDwrCorrelationRecord) -> Optional[AgentDwrCorrelationRecord]:
+        """Persists an explicit relational correlation between Antigravity and DWR."""
+        clean_metadata = PrivacyEnforcer.check_and_sanitize(record.metadata, context="agent_correlation.metadata")
+        conf_str = record.confidence.value if isinstance(record.confidence, CorrelationConfidence) else str(record.confidence)
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO agent_dwr_correlations (
+                        correlation_id, confidence, agent_session_id, conversation_id,
+                        turn_id, tool_call_id, dwr_session_id, dwr_mission_id,
+                        dwr_action_id, correlation_source, timestamp, iso_timestamp, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(correlation_id) DO UPDATE SET
+                        confidence = excluded.confidence,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.correlation_id,
+                        conf_str,
+                        record.agent_session_id,
+                        record.conversation_id,
+                        record.turn_id,
+                        record.tool_call_id,
+                        record.dwr_session_id,
+                        record.dwr_mission_id,
+                        record.dwr_action_id,
+                        record.correlation_source,
+                        record.timestamp,
+                        record.iso_timestamp,
+                        json.dumps(clean_metadata, default=str),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record agent correlation %s: %s", record.correlation_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record agent correlation: {e}") from e
                 return None
 
     # -------------------------------------------------------------------------
@@ -1323,6 +1627,414 @@ class ExperienceStore:
                 logger.error("Failed to get failures by action type: %s", e)
                 return []
 
+    # -------------------------------------------------------------------------
+    # Antigravity Historical Intelligence Queries (Milestone 2.1 Prompt 3)
+    # -------------------------------------------------------------------------
+
+    def get_agent_sessions(self, conversation_id: Optional[str] = None, limit: int = 50) -> List[AgentSessionRecord]:
+        """Retrieves agent session records, optionally filtered by conversation_id."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                if conversation_id:
+                    cursor.execute(
+                        "SELECT * FROM agent_sessions WHERE conversation_id = ? ORDER BY started_at DESC LIMIT ?;",
+                        (conversation_id, limit),
+                    )
+                else:
+                    cursor.execute("SELECT * FROM agent_sessions ORDER BY started_at DESC LIMIT ?;", (limit,))
+                results: List[AgentSessionRecord] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        AgentSessionRecord(
+                            agent_session_id=row["agent_session_id"],
+                            conversation_id=row["conversation_id"],
+                            agent_id=row["agent_id"],
+                            workspace_id=row["workspace_id"],
+                            started_at=row["started_at"],
+                            completed_at=row["completed_at"],
+                            status=row["status"],
+                            metadata=json.loads(row["metadata_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get agent sessions: %s", e)
+                return []
+
+    def get_agent_tool_calls(
+        self,
+        agent_session_id: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[AgentToolCallRecord]:
+        """Retrieves agent tool calls matching optional filters."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM agent_tool_calls"
+                clauses: List[str] = []
+                params: List[Any] = []
+
+                if agent_session_id:
+                    clauses.append("agent_session_id = ?")
+                    params.append(agent_session_id)
+                if tool_name:
+                    clauses.append("tool_name = ?")
+                    params.append(tool_name)
+
+                if clauses:
+                    query += " WHERE " + " AND ".join(clauses)
+
+                query += " ORDER BY timestamp DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, tuple(params))
+                results: List[AgentToolCallRecord] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        AgentToolCallRecord(
+                            tool_call_id=row["tool_call_id"],
+                            turn_id=row["turn_id"],
+                            agent_session_id=row["agent_session_id"],
+                            conversation_id=row["conversation_id"],
+                            tool_name=row["tool_name"],
+                            tool_category=row["tool_category"],
+                            success=bool(row["success"]),
+                            error_class=row["error_class"],
+                            duration_ms=row["duration_ms"],
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                            safe_summary=json.loads(row["safe_summary_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get agent tool calls: %s", e)
+                return []
+
+    def get_agent_tool_calls_for_session(self, dwr_session_id: str) -> List[AgentToolCallRecord]:
+        """
+        Historical Query: Which agent tool calls were associated with a given DWR session?
+        """
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT DISTINCT t.*
+                    FROM agent_tool_calls t
+                    JOIN agent_dwr_correlations c
+                      ON (c.tool_call_id IS NOT NULL AND c.tool_call_id != '' AND t.tool_call_id = c.tool_call_id)
+                      OR ((c.tool_call_id IS NULL OR c.tool_call_id = '') AND (
+                          (c.turn_id IS NOT NULL AND c.turn_id != '' AND t.turn_id = c.turn_id)
+                          OR (c.agent_session_id IS NOT NULL AND c.agent_session_id != '' AND t.agent_session_id = c.agent_session_id)
+                      ))
+                    WHERE c.dwr_session_id = ?
+                    ORDER BY t.timestamp ASC;
+                    """,
+                    (dwr_session_id,),
+                )
+                results: List[AgentToolCallRecord] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        AgentToolCallRecord(
+                            tool_call_id=row["tool_call_id"],
+                            turn_id=row["turn_id"],
+                            agent_session_id=row["agent_session_id"],
+                            conversation_id=row["conversation_id"],
+                            tool_name=row["tool_name"],
+                            tool_category=row["tool_category"],
+                            success=bool(row["success"]),
+                            error_class=row["error_class"],
+                            duration_ms=row["duration_ms"],
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                            safe_summary=json.loads(row["safe_summary_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get agent tool calls for session %s: %s", dwr_session_id, e)
+                return []
+
+    def get_agent_activity_for_dwr_action(self, dwr_action_id: str) -> List[AgentToolCallRecord]:
+        """
+        Historical Query: Which agent tool call resulted in or preceded a DWR action?
+        """
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT DISTINCT t.*
+                    FROM agent_tool_calls t
+                    JOIN agent_dwr_correlations c
+                      ON (c.tool_call_id IS NOT NULL AND c.tool_call_id != '' AND t.tool_call_id = c.tool_call_id)
+                      OR ((c.tool_call_id IS NULL OR c.tool_call_id = '') AND (
+                          (c.turn_id IS NOT NULL AND c.turn_id != '' AND t.turn_id = c.turn_id)
+                      ))
+                    WHERE c.dwr_action_id = ?
+                    ORDER BY t.timestamp ASC;
+                    """,
+                    (dwr_action_id,),
+                )
+                results: List[AgentToolCallRecord] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        AgentToolCallRecord(
+                            tool_call_id=row["tool_call_id"],
+                            turn_id=row["turn_id"],
+                            agent_session_id=row["agent_session_id"],
+                            conversation_id=row["conversation_id"],
+                            tool_name=row["tool_name"],
+                            tool_category=row["tool_category"],
+                            success=bool(row["success"]),
+                            error_class=row["error_class"],
+                            duration_ms=row["duration_ms"],
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                            safe_summary=json.loads(row["safe_summary_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get agent activity for action %s: %s", dwr_action_id, e)
+                return []
+
+    def get_agent_tool_calls_by_outcome(self, verdict: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Historical Query: Relates agent tool calls to successful (PASS), failed (FAIL),
+        or UNVERIFIED DWR review outcomes.
+        """
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT DISTINCT
+                        t.tool_call_id,
+                        t.tool_name,
+                        t.tool_category,
+                        t.success as tool_success,
+                        o.verdict as review_verdict,
+                        c.confidence as correlation_confidence,
+                        c.dwr_session_id,
+                        t.timestamp
+                    FROM agent_tool_calls t
+                    JOIN agent_dwr_correlations c
+                      ON (c.tool_call_id IS NOT NULL AND c.tool_call_id != '' AND t.tool_call_id = c.tool_call_id)
+                      OR ((c.tool_call_id IS NULL OR c.tool_call_id = '') AND (
+                          (c.turn_id IS NOT NULL AND c.turn_id != '' AND t.turn_id = c.turn_id)
+                          OR (c.agent_session_id IS NOT NULL AND c.agent_session_id != '' AND t.agent_session_id = c.agent_session_id)
+                      ))
+                    JOIN experience_outcomes o ON c.dwr_session_id = o.session_id
+                    WHERE o.verdict = ?
+                    ORDER BY t.timestamp DESC
+                    LIMIT ?;
+                    """,
+                    (verdict.upper(), limit),
+                )
+                results: List[Dict[str, Any]] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        {
+                            "tool_call_id": row["tool_call_id"],
+                            "tool_name": row["tool_name"],
+                            "tool_category": row["tool_category"],
+                            "tool_success": bool(row["tool_success"]),
+                            "review_verdict": row["review_verdict"],
+                            "correlation_confidence": row["correlation_confidence"],
+                            "dwr_session_id": row["dwr_session_id"],
+                            "timestamp": row["timestamp"],
+                        }
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get tool calls by outcome %s: %s", verdict, e)
+                return []
+
+    def get_recovery_frequency_by_agent_tool_category(self) -> List[Dict[str, Any]]:
+        """
+        Historical Query: How often did a DWR session require recovery after specific agent tool categories?
+        """
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT
+                        t.tool_category,
+                        COUNT(DISTINCT r.recovery_id) as recovery_attempts_count,
+                        COUNT(DISTINCT c.dwr_session_id) as affected_sessions_count
+                    FROM recovery_attempts r
+                    JOIN agent_dwr_correlations c ON r.session_id = c.dwr_session_id
+                    JOIN agent_tool_calls t
+                      ON (c.tool_call_id IS NOT NULL AND c.tool_call_id != '' AND t.tool_call_id = c.tool_call_id)
+                      OR ((c.tool_call_id IS NULL OR c.tool_call_id = '') AND (
+                          (c.turn_id IS NOT NULL AND c.turn_id != '' AND t.turn_id = c.turn_id)
+                          OR (c.agent_session_id IS NOT NULL AND c.agent_session_id != '' AND t.agent_session_id = c.agent_session_id)
+                      ))
+                    GROUP BY t.tool_category
+                    ORDER BY recovery_attempts_count DESC;
+                    """
+                )
+                results: List[Dict[str, Any]] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        {
+                            "tool_category": row["tool_category"],
+                            "recovery_attempts_count": row["recovery_attempts_count"],
+                            "affected_sessions_count": row["affected_sessions_count"],
+                        }
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get recovery frequency by tool category: %s", e)
+                return []
+
+    def get_user_corrections_for_failures(self) -> List[AgentCorrectionRecord]:
+        """
+        Historical Query: Which agent/user corrections followed reviewer failures?
+        """
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT DISTINCT ac.*
+                    FROM agent_corrections ac
+                    JOIN agent_dwr_correlations c
+                      ON ac.related_dwr_session_id = c.dwr_session_id
+                      OR ac.agent_session_id = c.agent_session_id
+                      OR ac.conversation_id = c.conversation_id
+                    JOIN normalized_failures f ON c.dwr_session_id = f.session_id
+                    ORDER BY ac.timestamp DESC;
+                    """
+                )
+                results: List[AgentCorrectionRecord] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        AgentCorrectionRecord(
+                            correction_id=row["correction_id"],
+                            correction_type=row["correction_type"],
+                            agent_session_id=row["agent_session_id"],
+                            conversation_id=row["conversation_id"],
+                            turn_id=row["turn_id"],
+                            tool_call_id=row["tool_call_id"],
+                            related_dwr_session_id=row["related_dwr_session_id"],
+                            related_action_id=row["related_action_id"],
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                            classification_details=json.loads(row["classification_details_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get corrections for failures: %s", e)
+                return []
+
+    def get_agent_dwr_correlations(
+        self,
+        dwr_session_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        min_confidence: Optional[Union[str, CorrelationConfidence]] = None,
+        limit: int = 100,
+    ) -> List[AgentDwrCorrelationRecord]:
+        """Retrieves relational correlation records matching filter criteria."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM agent_dwr_correlations"
+                clauses: List[str] = []
+                params: List[Any] = []
+
+                if dwr_session_id:
+                    clauses.append("dwr_session_id = ?")
+                    params.append(dwr_session_id)
+                if conversation_id:
+                    clauses.append("conversation_id = ?")
+                    params.append(conversation_id)
+                if min_confidence:
+                    conf_val = min_confidence.value if isinstance(min_confidence, CorrelationConfidence) else str(min_confidence)
+                    clauses.append("confidence = ?")
+                    params.append(conf_val)
+
+                if clauses:
+                    query += " WHERE " + " AND ".join(clauses)
+
+                query += " ORDER BY timestamp DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, tuple(params))
+                results: List[AgentDwrCorrelationRecord] = []
+                for row in cursor.fetchall():
+                    results.append(
+                        AgentDwrCorrelationRecord(
+                            correlation_id=row["correlation_id"],
+                            confidence=CorrelationConfidence(row["confidence"]),
+                            agent_session_id=row["agent_session_id"],
+                            conversation_id=row["conversation_id"],
+                            turn_id=row["turn_id"],
+                            tool_call_id=row["tool_call_id"],
+                            dwr_session_id=row["dwr_session_id"],
+                            dwr_mission_id=row["dwr_mission_id"],
+                            dwr_action_id=row["dwr_action_id"],
+                            correlation_source=row["correlation_source"],
+                            timestamp=float(row["timestamp"]),
+                            iso_timestamp=row["iso_timestamp"],
+                            metadata=json.loads(row["metadata_json"] or "{}"),
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to get correlations: %s", e)
+                return []
+
+    def get_agent_experience_summary(self) -> Dict[str, Any]:
+        """Computes aggregate metrics of Antigravity agent interactions with DWR."""
+        counts = self.get_record_counts()
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT tool_category, COUNT(*) as cnt FROM agent_tool_calls GROUP BY tool_category ORDER BY cnt DESC;"
+                )
+                category_counts = {row["tool_category"]: row["cnt"] for row in cursor.fetchall()}
+
+                cursor.execute(
+                    "SELECT confidence, COUNT(*) as cnt FROM agent_dwr_correlations GROUP BY confidence;"
+                )
+                confidence_distribution = {row["confidence"]: row["cnt"] for row in cursor.fetchall()}
+
+                return {
+                    "agent_sessions": counts.get("agent_sessions", 0),
+                    "agent_tool_calls": counts.get("agent_tool_calls", 0),
+                    "correlations": counts.get("agent_dwr_correlations", 0),
+                    "corrections": counts.get("agent_corrections", 0),
+                    "subagents": counts.get("agent_subagents", 0),
+                    "artifacts": counts.get("agent_artifacts", 0),
+                    "tool_categories": category_counts,
+                    "confidence_distribution": confidence_distribution,
+                }
+            except Exception as e:
+                logger.error("Failed to get agent experience summary: %s", e)
+                return {
+                    "agent_sessions": counts.get("agent_sessions", 0),
+                    "agent_tool_calls": counts.get("agent_tool_calls", 0),
+                    "correlations": counts.get("agent_dwr_correlations", 0),
+                    "corrections": counts.get("agent_corrections", 0),
+                }
+
     def get_record_counts(self) -> Dict[str, int]:
         """Returns row counts across all experience tables."""
         counts = {
@@ -1334,6 +2046,13 @@ class ExperienceStore:
             "outcomes": 0,
             "failures": 0,
             "recovery_attempts": 0,
+            "agent_sessions": 0,
+            "agent_turns": 0,
+            "agent_tool_calls": 0,
+            "agent_subagents": 0,
+            "agent_artifacts": 0,
+            "agent_corrections": 0,
+            "agent_dwr_correlations": 0,
         }
         with self._lock:
             try:
@@ -1348,6 +2067,13 @@ class ExperienceStore:
                     ("experience_outcomes", "outcomes"),
                     ("normalized_failures", "failures"),
                     ("recovery_attempts", "recovery_attempts"),
+                    ("agent_sessions", "agent_sessions"),
+                    ("agent_turns", "agent_turns"),
+                    ("agent_tool_calls", "agent_tool_calls"),
+                    ("agent_subagents", "agent_subagents"),
+                    ("agent_artifacts", "agent_artifacts"),
+                    ("agent_corrections", "agent_corrections"),
+                    ("agent_dwr_correlations", "agent_dwr_correlations"),
                 ]:
                     try:
                         cursor.execute(f"SELECT COUNT(*) FROM {table};")

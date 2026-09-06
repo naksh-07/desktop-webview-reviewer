@@ -50,6 +50,23 @@ from runtime.experience.adapter import (
     ExperienceIntegrationAdapter,
     SIGNIFICANT_TRACE_EVENTS,
 )
+from runtime.experience.antigravity import (
+    AgentArtifactRecord,
+    AgentCorrectionRecord,
+    AgentDwrCorrelationRecord,
+    AgentEventEnvelope,
+    AgentEventSanitizer,
+    AgentEventType,
+    AgentSessionRecord,
+    AgentSubagentRecord,
+    AgentToolCallRecord,
+    AgentTurnRecord,
+    AntigravityBridgeStatus,
+    AntigravityCorrelationBridge,
+    AntigravityHookAdapter,
+    CorrelationConfidence,
+    UserCorrectionType,
+)
 
 __all__ = [
     "ExperienceConfig",
@@ -83,5 +100,20 @@ __all__ = [
     "FailureNormalizer",
     "ExperienceIntegrationAdapter",
     "SIGNIFICANT_TRACE_EVENTS",
+    "AntigravityCorrelationBridge",
+    "AgentEventEnvelope",
+    "AgentEventType",
+    "CorrelationConfidence",
+    "UserCorrectionType",
+    "AgentSessionRecord",
+    "AgentTurnRecord",
+    "AgentToolCallRecord",
+    "AgentSubagentRecord",
+    "AgentArtifactRecord",
+    "AgentCorrectionRecord",
+    "AgentDwrCorrelationRecord",
+    "AntigravityBridgeStatus",
+    "AgentEventSanitizer",
+    "AntigravityHookAdapter",
 ]
 
