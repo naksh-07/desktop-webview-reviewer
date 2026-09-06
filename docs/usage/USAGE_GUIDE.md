@@ -7,57 +7,107 @@ It couples **Native Windows OS supervision** (Win32, DWM, Job Objects) with **We
 
 ---
 
-## 2. Prerequisites & Installation
+## 2. Architecture & Installation Model
 
-### System Requirements
-- **Operating System:** Windows 10 (Build 19041+) or Windows 11 (64-bit).
-- **Python:** Version 3.10, 3.11, 3.12, or 3.13.
-- **.NET Runtime (Optional for UIA3 sidecar):** .NET 8.0 SDK / Runtime (pure Win32 / CDP operates out-of-the-box without .NET).
-
-### Local Installation
-```powershell
-# From repository root using uv (recommended)
-uv sync
-
-# Or standard pip installation
-pip install -e .
-```
-
-### Self-Test & Diagnostics
-Verify that your local system capabilities and environment meet all requirements:
-```powershell
-# Run environment diagnostics
-desktop-webview-mcp --diagnostics
-
-# Run deterministic capability self-test
-desktop-webview-mcp --self-test
-```
+Desktop WebView Reviewer consists of four distinct architectural layers:
+- **Skill** (`skills/desktop-webview-reviewer/`): The authoritative Antigravity capability containing foundational operational policies, 7 declarative workflows, and reference documents.
+- **MCP Control Plane** (`desktop-webview-mcp`): The agent-facing interface exposing exactly 12 cohesive tools over JSON-RPC stdio.
+- **Reviewer Runtime** (`runtime/`, `core/`, `adapters/`): The Python engine executing Win32/UIA and CDP automation, reconciliation, and cryptographic evidence sealing.
+- **Wheel / sdist Packages**: Optional Python runtime distribution artifacts produced for environment packaging. **Installing a wheel is not the same as installing the Antigravity Skill.**
 
 ---
 
-## 3. MCP Server Configuration
+### Canonical Antigravity Installation (Standard Path)
 
-To connect an AI coding agent or MCP client (such as Google Antigravity, Claude Desktop, Cursor) to `desktop-webview-reviewer`, configure the client's MCP configuration file:
+To use Desktop WebView Reviewer inside Google Antigravity, follow this three-step installation:
 
-### Antigravity (`mcp_config.json`)
+#### Step 1: Install the Antigravity Skill
+Copy the `skills/desktop-webview-reviewer/` directory into your Antigravity skills configuration root:
+
+- **User-Global Customizations:**
+  ```powershell
+  Copy-Item -Recurse -Force skills/desktop-webview-reviewer "$HOME/.gemini/config/skills/desktop-webview-reviewer"
+  ```
+- **Workspace-Specific Customizations:**
+  ```powershell
+  Copy-Item -Recurse -Force skills/desktop-webview-reviewer ".agents/skills/desktop-webview-reviewer"
+  ```
+
+#### Step 2: Configure the MCP Server
+Register the Reviewer MCP server in your Antigravity MCP configuration (`mcp_config.json`):
+
 ```json
 {
   "mcpServers": {
-    "desktop-webview": {
-      "command": "uv",
-      "args": ["run", "desktop-webview-mcp", "--transport", "stdio"]
+    "desktop-webview-reviewer": {
+      "command": "desktop-webview-mcp",
+      "args": ["--transport", "stdio"]
     }
   }
 }
 ```
+*(If the runtime is installed in a specific virtual environment, supply the full path to `desktop-webview-mcp.exe` or use `["<path-to-python>", "-m", "runtime.mcp.server", "--transport", "stdio"]`).*
+
+#### Step 3: Manage the Python Reviewer Runtime
+The MCP server and CLI commands execute the Python runtime. Requirements:
+- **Operating System:** Windows 10 (Build 19041+) or Windows 11 (64-bit).
+- **Python:** Version 3.10, 3.11, 3.12, or 3.13 (64-bit).
+- **.NET Runtime (Optional for UIA3 sidecar):** .NET 8.0 SDK / Runtime (pure Win32 / CDP operates out-of-the-box without .NET).
+
+Install the runtime in your active Python environment:
+```powershell
+# Standard pip installation
+pip install desktop-webview-reviewer
+
+# Or install from release distribution wheel artifact
+pip install desktop_webview_reviewer-2.0.0b2-py3-none-any.whl
+```
+
+#### Step 4: Verify Installation Health
+Run the comprehensive lifecycle doctor and MCP self-test:
+```powershell
+# Run 10-point lifecycle & skill synchronization health check
+desktop-reviewer update doctor
+
+# Run deterministic 7/7 MCP in-process self-test
+desktop-webview-mcp --self-test
+
+# Run environmental diagnostics
+desktop-webview-mcp --diagnostics
+```
+
+---
+
+### Developer & Source-Development Workflow (Developers Only)
+
+> [!NOTE]
+> Installing via `pip install -e .` or `uv sync` from a cloned source repository is strictly for **contributors developing the Reviewer codebase itself**, not normal Antigravity installation.
+
+```powershell
+# Clone repository
+git clone https://github.com/naksh-07/desktop-webview-reviewer.git
+cd desktop-webview-reviewer
+
+# Developer environment setup with uv (recommended)
+uv sync
+
+# Or editable install with pip
+pip install -e .
+```
+
+---
+
+## 3. External MCP Client Configuration
+
+For non-Antigravity MCP clients (e.g. Claude Desktop, Cursor), configure the client to invoke the installed runtime:
 
 ### Claude Desktop (`claude_desktop_config.json`)
 ```json
 {
   "mcpServers": {
-    "desktop-webview": {
-      "command": "python",
-      "args": ["-m", "runtime.mcp.server", "--transport", "stdio"],
+    "desktop-webview-reviewer": {
+      "command": "desktop-webview-mcp",
+      "args": ["--transport", "stdio"],
       "env": {
         "PYTHONUNBUFFERED": "1"
       }
@@ -67,6 +117,7 @@ To connect an AI coding agent or MCP client (such as Google Antigravity, Claude 
 ```
 
 ---
+
 
 ## 4. Standard Agent Review Workflow
 

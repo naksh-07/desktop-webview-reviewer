@@ -33,3 +33,8 @@ obj/
 
 # Ephemeral evidence directory
 evidence/
+
+# Build and distribution artifacts
+dist/
+build/
+

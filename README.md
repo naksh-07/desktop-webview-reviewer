@@ -138,24 +138,91 @@ The project includes a first-class agent instruction skill located at:
 
 ---
 
-## Installation & CLI Usage
+## Installation & Integration Architecture
 
-### Requirements
-- **OS:** Windows 10 (Build 19041+) or Windows 11 (64-bit)
-- **Python:** 3.10 to 3.13 (64-bit)
+Desktop WebView Reviewer is fundamentally an **Antigravity Agent Skill + agent workflows + MCP control plane + Reviewer Runtime**.
 
-### Installation
-```powershell
-# Install via pip
-pip install desktop-webview-reviewer
+To prevent architectural confusion, distinguish the four layers:
+- **Skill** = Antigravity capability instructions, operational policies, and declarative workflows (`skills/desktop-webview-reviewer/`).
+- **MCP** = Agent-facing control interface exposing exactly 12 cohesive tools over JSON-RPC stdio (`desktop-webview-mcp`).
+- **Runtime** = Python implementation executed by the MCP server and CLI tools (`runtime/`, `core/`, `adapters/`).
+- **Wheel / sdist** = Optional Python runtime distribution artifacts produced for packaging; they are **NOT** the Antigravity Skill itself.
+
+---
+
+### Canonical Antigravity Installation (Primary Path)
+
+The canonical Antigravity installation requires three straightforward steps:
+
+#### Step 1: Install the Antigravity Skill
+Copy the `skills/desktop-webview-reviewer/` directory into your Antigravity skills configuration root:
+
+- **Global Customizations:**
+  ```powershell
+  # Copy skill to user-global Antigravity configuration
+  Copy-Item -Recurse -Force skills/desktop-webview-reviewer "$HOME/.gemini/config/skills/desktop-webview-reviewer"
+  ```
+- **Workspace Customizations:**
+  ```powershell
+  # Or install locally for a specific workspace repository
+  Copy-Item -Recurse -Force skills/desktop-webview-reviewer ".agents/skills/desktop-webview-reviewer"
+  ```
+
+#### Step 2: Configure the MCP Server
+Register the Reviewer MCP server in your Antigravity MCP configuration (`mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "desktop-webview-reviewer": {
+      "command": "desktop-webview-mcp",
+      "args": ["--transport", "stdio"]
+    }
+  }
+}
 ```
+*(If `desktop-webview-mcp` is installed inside a dedicated virtual environment, provide the absolute path to the executable or Python interpreter).*
 
-### Antigravity-Native Integration (Model B)
-Desktop WebView Reviewer is designed to operate as a native capability within Google Antigravity. By installing the Python package globally (or in your active virtual environment), Antigravity can directly invoke the `desktop-webview-mcp` transport and `desktop-reviewer` CLI. 
+#### Step 3: Obtain and Manage the Python Runtime
+The Reviewer Runtime is the underlying Python engine that powers the MCP server and CLI. It requires **Python 3.10–3.13 (64-bit)** on **Windows 10 (Build 19041+) or Windows 11**:
 
-1. Install the package via `pip install desktop-webview-reviewer`.
-2. Add the `desktop-webview-reviewer` skill to your `.gemini/config/skills/` directory.
-3. The Antigravity agent will automatically discover and use the globally available CLI to orchestrate review missions without requiring a local source clone.
+- **Standard Runtime Installation:**
+  ```powershell
+  pip install desktop-webview-reviewer
+  ```
+- **From Distribution Packages (Optional):**
+  If using pre-built release artifacts:
+  ```powershell
+  pip install desktop_webview_reviewer-2.0.0b2-py3-none-any.whl
+  ```
+- **Verify Installation Health:**
+  ```powershell
+  # Verify system health, executable resolution, and skill synchronization
+  desktop-reviewer update doctor
+
+  # Run deterministic 7/7 MCP self-test
+  desktop-webview-mcp --self-test
+  ```
+
+---
+
+### Developer & Source-Development Workflow (Developers Only)
+
+> [!NOTE]
+> Local editable installation (`pip install -e .`), `uv sync`, and working out of a git clone are **developer-only workflows** intended solely for contributors developing the Reviewer codebase itself. They are not the standard Antigravity installation.
+
+For contributors developing the `desktop-webview-reviewer` runtime:
+```powershell
+# Clone the repository
+git clone https://github.com/naksh-07/desktop-webview-reviewer.git
+cd desktop-webview-reviewer
+
+# Sync virtual environment with uv (recommended for development)
+uv sync
+
+# Or editable install with pip
+pip install -e .
+```
 
 ### CLI Commands
 ```powershell

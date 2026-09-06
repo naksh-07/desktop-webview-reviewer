@@ -42,9 +42,9 @@ Prior to this final certification, a critical release-blocking defect was discov
 
 The distribution model was transitioned to **Model B** (Wrapper Script) to properly support Antigravity Agent native integration. 
 
-*   The project now utilizes a clean `pyproject.toml` definition exposing the `desktop-reviewer` command line tool.
-*   The `SKILL.md` was updated to instruct the Antigravity system to invoke `desktop-reviewer` natively.
-*   Clean-machine testing verified that `uv run --with dist/desktop_webview_reviewer-2.0.0-py3-none-any.whl desktop-reviewer --help` correctly spawns the CLI and exposes the 12 required MCP tools alongside mission orchestration.
+*   The project now utilizes a clean `pyproject.toml` definition exposing the `desktop-reviewer` command line tool and `desktop-webview-mcp` transport.
+*   The Antigravity Skill resides in `skills/desktop-webview-reviewer/` with declarative workflows and operational policies.
+*   Clean-machine testing verified that the packaged runtime wheel (`dist/desktop_webview_reviewer-2.0.0-py3-none-any.whl`) installs cleanly and correctly spawns the CLI, exposing the 12 required MCP tools alongside mission orchestration.
 
 ## 5. Security & Boundary Enforcement
 
