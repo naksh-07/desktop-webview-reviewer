@@ -29,10 +29,10 @@ logger = logging.getLogger("desktop_webview.experience.privacy")
 MAX_METADATA_STRING_LENGTH = 32768
 
 PROHIBITED_KEY_PATTERN = re.compile(
-    r"(?i)^(chain_of_thought|cot|hidden_thoughts|reasoning_trace|raw_reasoning|"
-    r"model_transcript|unfiltered_prompt|prompt_archive|raw_transcript|"
+    r"(?i)^(chain_of_thought|cot|hidden_thoughts?|.*reasoning.*|"
+    r"model_transcript|unfiltered_prompt|prompt_archive|.*transcript.*|"
     r"password|passwd|api_?key|bearer_?token|auth_?token|jwt|cookie|cookies|"
-    r"private_?key|secret_?key)$"
+    r"private_?key|secret_?key|authorization.*)$"
 )
 
 SECRET_VALUE_PATTERNS = [

@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from runtime.errors import DesktopAutomationException
+from runtime.errors import DesktopAutomationException, GovernanceBypassException
 from runtime.experience.learning.models import (
     CandidateStatus,
     DurableKnowledgeRecord,
@@ -44,7 +44,7 @@ logger = logging.getLogger("desktop_webview.experience.learning.governance")
 DEFAULT_KNOWLEDGE_TTL_DAYS = 90
 
 
-class GovernanceException(DesktopAutomationException):
+class GovernanceException(GovernanceBypassException):
     """Raised when an invalid governance transition or unauthorized promotion is attempted."""
     pass
 

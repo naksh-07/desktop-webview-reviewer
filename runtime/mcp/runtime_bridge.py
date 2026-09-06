@@ -135,6 +135,8 @@ class RuntimeBridge:
                         logger.info(f"Connected WebviewAutomationCore to target '{primary_t.title}' ({primary_t.target_id})")
                 except Exception as e:
                     logger.warning(f"Could not connect WebviewAutomationCore on port {cdp_port}: {e}")
+            elif core and primary_hwnd and not core.native_hwnd:
+                core.native_hwnd = primary_hwnd
 
             # Evidence Store
             if not session.evidence_store:

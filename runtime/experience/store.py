@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from core.version import get_version_info
-from runtime.errors import DesktopAutomationException
+from runtime.errors import DesktopAutomationException, GovernanceBypassException
 from runtime.experience.config import ExperienceConfig, get_default_experience_dir
 from runtime.experience.models import (
     ActionReferenceRecord,
@@ -1193,7 +1193,7 @@ class ExperienceStore:
         """Convenience alias for get_trace_references(session_id)."""
         return self.get_trace_references(session_id=session_id)
 
-    def get_outcomes(self, session_id: Optional[str] = None) -> List[OutcomeRecord]:
+    def get_outcomes(self, session_id: Optional[str] = None, limit: int = 100) -> List[OutcomeRecord]:
         """Retrieves review outcomes, optionally filtered by session_id."""
         with self._lock:
             try:
@@ -1201,11 +1201,11 @@ class ExperienceStore:
                 cursor = conn.cursor()
                 if session_id:
                     cursor.execute(
-                        "SELECT * FROM experience_outcomes WHERE session_id = ? ORDER BY timestamp DESC;",
-                        (session_id,),
+                        "SELECT * FROM experience_outcomes WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?;",
+                        (session_id, limit),
                     )
                 else:
-                    cursor.execute("SELECT * FROM experience_outcomes ORDER BY timestamp DESC LIMIT 100;")
+                    cursor.execute("SELECT * FROM experience_outcomes ORDER BY timestamp DESC LIMIT ?;", (limit,))
 
                 vinfo = get_version_info()
                 results = []
@@ -2467,6 +2467,22 @@ class ExperienceStore:
             try:
                 conn = self._get_connection()
                 cursor = conn.cursor()
+
+                # Enforce immutability of governance records (cannot silently rewrite decisions)
+                cursor.execute(
+                    "SELECT reviewer, decision, rationale FROM governance_records WHERE governance_id = ?;",
+                    (record.governance_id,),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    existing_decision = existing[1]
+                    existing_reviewer = existing[0]
+                    new_decision = record.decision.value if isinstance(record.decision, GovernanceDecision) else str(record.decision)
+                    if existing_decision != new_decision or existing_reviewer != record.reviewer:
+                        raise GovernanceBypassException(
+                            f"Governance record '{record.governance_id}' already exists and cannot be silently rewritten."
+                        )
+
                 cursor.execute(
                     """
                     INSERT INTO governance_records (
@@ -2493,6 +2509,8 @@ class ExperienceStore:
                 conn.commit()
                 self._last_write_iso = datetime.now(timezone.utc).isoformat()
                 return record
+            except GovernanceBypassException:
+                raise
             except Exception as e:
                 logger.error("Failed to record governance decision %s: %s", record.governance_id, e)
                 if not self.config.fail_safe_mode:
@@ -2539,6 +2557,20 @@ class ExperienceStore:
     def record_durable_knowledge(self, record: DurableKnowledgeRecord) -> Optional[DurableKnowledgeRecord]:
         """Persists or updates durable knowledge item."""
         validate_scope_promotion(record.scope)
+
+        # Defense-in-depth against direct governance bypass
+        status_val = record.status.value if isinstance(record.status, KnowledgeStatus) else str(record.status).upper()
+        if status_val == "DURABLE":
+            if not record.approval_metadata or not isinstance(record.approval_metadata, dict):
+                raise GovernanceBypassException(
+                    "Direct write of DURABLE knowledge without legitimate governance approval metadata is prohibited."
+                )
+            reviewer = record.approval_metadata.get("reviewer")
+            if not reviewer or not str(reviewer).strip():
+                raise GovernanceBypassException(
+                    "Direct write of DURABLE knowledge requires a valid non-empty reviewer in approval metadata."
+                )
+
         prov_dict = record.provenance.to_dict() if record.provenance else {}
 
         with self._lock:

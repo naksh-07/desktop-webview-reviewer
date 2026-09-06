@@ -177,6 +177,7 @@ class TestFieldIntelligenceEngine(unittest.TestCase):
             normalized_statement="Knowledge due for review",
             status=KnowledgeStatus.DURABLE,
             review_due_at=(now - timedelta(days=5)).isoformat(),
+            approval_metadata={"reviewer": "field_reviewer"},
         )
         k_stale = DurableKnowledgeRecord(
             knowledge_id="k_stale",

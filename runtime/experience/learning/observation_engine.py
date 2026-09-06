@@ -62,6 +62,17 @@ class LearningObservationEngine:
     def create_observation_from_correction(self, correction: AgentCorrectionRecord, related_failure: Optional[NormalizedFailureRecord] = None, project_id: Optional[str] = None) -> ObservationRecord:
         return self.derive_from_user_correction(correction, related_failure=related_failure, project_id=project_id)
 
+    @staticmethod
+    def _bound_payload_strings(data: Any, max_len: int = 2048) -> Any:
+        """Enforces forensic compactness; prevents unrestricted DOM or stack traces from ballooning observations."""
+        if isinstance(data, dict):
+            return {str(k): LearningObservationEngine._bound_payload_strings(v, max_len) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [LearningObservationEngine._bound_payload_strings(item, max_len) for item in data]
+        elif isinstance(data, str) and len(data) > max_len:
+            return data[:max_len] + "...[TRUNCATED]"
+        return data
+
     @classmethod
     def derive_from_failure(
         cls,
@@ -72,7 +83,7 @@ class LearningObservationEngine:
         Derives an observation from a normalized failure record using its stable signature.
         """
         obs_id = f"obs_fail_{uuid.uuid4().hex[:12]}"
-        safe_ctx = dict(failure.safe_context or {})
+        safe_ctx = cls._bound_payload_strings(dict(failure.safe_context or {}))
         clean_ctx = LearningSafetyGate.validate_learning_payload(safe_ctx, context="observation.failure")
 
         # Reuse existing stable failure signature from FailureNormalizer

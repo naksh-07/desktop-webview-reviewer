@@ -371,7 +371,7 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
                 "durable_knowledge": len(durable_items),
                 "review_due": len(decay_eval.get("review_due", [])),
                 "stale_knowledge": len(decay_eval.get("stale", [])),
-                "privacy_violations_blocked": LearningSafetyGate.blocked_violations_count,
+                "privacy_violations_blocked": LearningSafetyGate.blocked_violations_count(),
             }
         except Exception:
             pass

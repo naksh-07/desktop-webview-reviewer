@@ -71,5 +71,9 @@ executionEnvironments = [
 ]
 extraPaths = [".", "tests"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+
 
 

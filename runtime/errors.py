@@ -555,3 +555,16 @@ class ActionDispatchRejectedException(DesktopAutomationException):
         )
 
 
+class GovernanceBypassException(DesktopAutomationException):
+    """Raised when an unauthorized bypass of human governance or durable knowledge invariants is attempted."""
+
+    def __init__(self, message: str, code: str = "GOVERNANCE_BYPASS_ATTEMPTED", details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            code=code,
+            recoverable=False,
+            agent_action_hint="Submit candidates for human review; direct writes of durable knowledge without governance are prohibited.",
+            details=details or {},
+        )
+
+

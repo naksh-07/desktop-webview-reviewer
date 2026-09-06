@@ -157,6 +157,7 @@ class TestGovernanceAndDecayLifecycle(unittest.TestCase):
             normalized_statement="For button#save, retry after 50ms",
             status=KnowledgeStatus.DURABLE,
             review_due_at=past_review,
+            approval_metadata={"reviewer": "qa_reviewer"},
         )
         self.store.record_durable_knowledge(durable)
 
@@ -174,6 +175,7 @@ class TestGovernanceAndDecayLifecycle(unittest.TestCase):
             normalized_statement="Old observation rule",
             status=KnowledgeStatus.DURABLE,
             review_due_at=long_past,
+            approval_metadata={"reviewer": "qa_reviewer"},
         )
         self.store.record_durable_knowledge(durable)
 

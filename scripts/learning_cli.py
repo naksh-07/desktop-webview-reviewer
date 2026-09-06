@@ -355,11 +355,199 @@ def cmd_field_intel(store: ExperienceStore, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_status(store: ExperienceStore, args: argparse.Namespace) -> int:
+    """Displays comprehensive aggregate counts across observations, patterns, candidates, durable knowledge, and governance."""
+    try:
+        counts = store.get_record_counts()
+        observations = store.get_observations(limit=1000)
+        patterns = store.get_patterns(limit=1000)
+        candidates = store.get_improvement_candidates(limit=1000)
+        durable_items = store.get_durable_knowledge(limit=1000)
+        gov_records = store.get_governance_records(limit=1000)
+
+        cand_by_status: Dict[str, int] = {}
+        for c in candidates:
+            st = c.status.value if hasattr(c.status, "value") else str(c.status)
+            cand_by_status[st] = cand_by_status.get(st, 0) + 1
+
+        decay_engine = KnowledgeDecayEngine(store)
+        staleness = decay_engine.evaluate_staleness()
+
+        data = {
+            "observations_total": len(observations),
+            "patterns_total": len(patterns),
+            "candidates_total": len(candidates),
+            "candidates_by_status": cand_by_status,
+            "durable_knowledge_total": len(durable_items),
+            "durable_active": len(staleness.get("active", [])),
+            "durable_review_due": len(staleness.get("review_due", [])),
+            "durable_stale": len(staleness.get("stale", [])),
+            "governance_decisions_total": len(gov_records),
+            "privacy_violations_blocked": LearningSafetyGate.blocked_violations_count(),
+            "store_record_counts": counts,
+        }
+
+        if args.json:
+            print(json.dumps(data, indent=2))
+            return 0
+
+        print("=" * 80)
+        print("  Desktop WebView Reviewer — Learning & Governance Status")
+        print("=" * 80)
+        print(f"Observations Recorded:       {len(observations)}")
+        print(f"Patterns Discovered:         {len(patterns)}")
+        print(f"Improvement Candidates:      {len(candidates)}")
+        for st, c_cnt in cand_by_status.items():
+            print(f"  - {st:<25}: {c_cnt}")
+        print(f"Durable Knowledge Total:     {len(durable_items)}")
+        print(f"  - Active:                  {len(staleness.get('active', []))}")
+        print(f"  - Review Due:              {len(staleness.get('review_due', []))}")
+        print(f"  - Stale:                   {len(staleness.get('stale', []))}")
+        print(f"Governance Records:          {len(gov_records)}")
+        print(f"Privacy Violations Blocked:  {LearningSafetyGate.blocked_violations_count()}")
+        print("=" * 80)
+        return 0
+    except Exception as e:
+        logger.error("Failed to retrieve learning status: %s", e)
+        print(f"Error: Unable to retrieve status: {e}")
+        return 1
+
+
+def cmd_run_observations(store: ExperienceStore, args: argparse.Namespace) -> int:
+    """Derives and records observations from failures, recoveries, and outcomes."""
+    try:
+        from runtime.experience.learning.observation_engine import LearningObservationEngine
+        engine = LearningObservationEngine(store)
+        recorded = 0
+
+        failures = store.get_failures(limit=args.limit)
+        for f in failures:
+            obs = engine.create_observation_from_failure(f, project_id=args.project)
+            if obs:
+                store.record_observation(obs)
+                recorded += 1
+
+        recoveries = store.get_recovery_attempts(limit=args.limit)
+        for r in recoveries:
+            obs = engine.create_observation_from_recovery(r, project_id=args.project)
+            if obs:
+                store.record_observation(obs)
+                recorded += 1
+
+        outcomes = store.get_outcomes(limit=args.limit)
+        for o in outcomes:
+            obs = engine.create_observation_from_outcome(o, project_id=args.project)
+            if obs:
+                store.record_observation(obs)
+                recorded += 1
+
+        if args.json:
+            print(json.dumps({
+                "failures_evaluated": len(failures),
+                "recoveries_evaluated": len(recoveries),
+                "outcomes_evaluated": len(outcomes),
+                "observations_recorded": recorded,
+            }, indent=2))
+            return 0
+
+        print(f"Processed failures ({len(failures)}), recoveries ({len(recoveries)}), outcomes ({len(outcomes)}) -> Recorded {recorded} observations.")
+        return 0
+    except Exception as e:
+        logger.error("run-observations failed: %s", e)
+        print(f"Error executing run-observations: {e}")
+        return 1
+
+
+def cmd_run_patterns(store: ExperienceStore, args: argparse.Namespace) -> int:
+    """Discovers and records explainable patterns from accumulated observations."""
+    try:
+        from runtime.experience.learning.pattern_detector import DeterministicPatternDetector
+        scope_val = ExperienceScope(args.scope.lower()) if args.scope else ExperienceScope.PROJECT
+        observations = store.get_observations(limit=args.limit)
+        patterns = DeterministicPatternDetector.detect_patterns(
+            observations=observations,
+            scope=scope_val,
+            project_id=args.project,
+        )
+        recorded = 0
+        for p in patterns:
+            store.record_pattern(p)
+            recorded += 1
+
+        if args.json:
+            print(json.dumps({
+                "observations_evaluated": len(observations),
+                "patterns_detected": len(patterns),
+                "patterns_recorded": recorded,
+            }, indent=2))
+            return 0
+
+        print(f"Evaluated {len(observations)} observations -> Detected & recorded {recorded} patterns.")
+        return 0
+    except Exception as e:
+        logger.error("run-patterns failed: %s", e)
+        print(f"Error executing run-patterns: {e}")
+        return 1
+
+
+def cmd_run_candidates(store: ExperienceStore, args: argparse.Namespace) -> int:
+    """Synthesizes improvement candidates from detected patterns."""
+    try:
+        from runtime.experience.learning.candidate_generator import ImprovementCandidateGenerator
+        patterns = store.get_patterns(limit=args.limit)
+        generated = 0
+        for pat in patterns:
+            cand = ImprovementCandidateGenerator.generate_candidate(pat)
+            store.record_improvement_candidate(cand)
+            generated += 1
+
+        if args.json:
+            print(json.dumps({
+                "patterns_evaluated": len(patterns),
+                "candidates_generated": generated,
+            }, indent=2))
+            return 0
+
+        print(f"Evaluated {len(patterns)} patterns -> Generated & recorded {generated} improvement candidates.")
+        return 0
+    except Exception as e:
+        logger.error("run-candidates failed: %s", e)
+        print(f"Error executing run-candidates: {e}")
+        return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description="Desktop WebView Reviewer Learning, Governance & Field Intelligence CLI"
     )
     subparsers = parser.add_subparsers(dest="command", help="Subcommand to execute")
+
+    # status
+    p_status = subparsers.add_parser("status", help="Display aggregate learning, governance, and safety status")
+    p_status.add_argument("--json", action="store_true", help="Output JSON")
+
+    # report
+    p_report = subparsers.add_parser("report", help="Display 12 descriptive aggregate field intelligence metrics (alias for field-intel)")
+    p_report.add_argument("--project", help="Filter by project ID")
+    p_report.add_argument("--json", action="store_true", help="Output JSON")
+
+    # run-observations
+    p_run_obs = subparsers.add_parser("run-observations", help="Derive and record observations from failures, recoveries, and outcomes")
+    p_run_obs.add_argument("--limit", type=int, default=100, help="Maximum number of historical records to process (default: 100)")
+    p_run_obs.add_argument("--project", help="Filter by project ID")
+    p_run_obs.add_argument("--json", action="store_true", help="Output JSON")
+
+    # run-patterns
+    p_run_pat = subparsers.add_parser("run-patterns", help="Discover and record explainable patterns from accumulated observations")
+    p_run_pat.add_argument("--limit", type=int, default=100, help="Maximum number of observations to evaluate (default: 100)")
+    p_run_pat.add_argument("--scope", help="Pattern scope (project, session)")
+    p_run_pat.add_argument("--project", help="Filter by project ID")
+    p_run_pat.add_argument("--json", action="store_true", help="Output JSON")
+
+    # run-candidates
+    p_run_cand = subparsers.add_parser("run-candidates", help="Synthesize improvement candidates from detected patterns")
+    p_run_cand.add_argument("--limit", type=int, default=100, help="Maximum number of patterns to evaluate (default: 100)")
+    p_run_cand.add_argument("--json", action="store_true", help="Output JSON")
 
     # list
     p_list = subparsers.add_parser("list", help="List improvement candidates")
@@ -409,9 +597,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         parser.print_help()
         return 0
 
-    store = ExperienceStore.get_default_store()
+    try:
+        store = ExperienceStore.get_default_store()
+    except Exception as e:
+        print(f"Error: Unable to access Experience Store: {e}")
+        return 1
 
-    if args.command == "list":
+    if args.command == "status":
+        return cmd_status(store, args)
+    elif args.command in ("report", "field-intel"):
+        return cmd_field_intel(store, args)
+    elif args.command == "run-observations":
+        return cmd_run_observations(store, args)
+    elif args.command == "run-patterns":
+        return cmd_run_patterns(store, args)
+    elif args.command == "run-candidates":
+        return cmd_run_candidates(store, args)
+    elif args.command == "list":
         return cmd_list(store, args)
     elif args.command == "inspect":
         return cmd_inspect(store, args)
@@ -423,8 +625,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_reject(store, args)
     elif args.command == "decay":
         return cmd_decay(store, args)
-    elif args.command == "field-intel":
-        return cmd_field_intel(store, args)
 
     return 0
 

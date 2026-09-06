@@ -106,6 +106,23 @@ class ObservationEngine:
         # 1. Observe Native Perspective
         native_obs: Optional[NativeObservation] = None
         target_hwnd = hwnd or (self.webview_core.native_hwnd if self.webview_core else None)
+        if not target_hwnd and self.webview_core and self.webview_core.native_pid and self.native_supervisor:
+            try:
+                candidate_pids = {self.webview_core.native_pid}
+                import psutil
+                proc = psutil.Process(self.webview_core.native_pid)
+                candidate_pids.update(c.pid for c in proc.children(recursive=True))
+                for c_pid in candidate_pids:
+                    for h in self.native_supervisor.find_windows_by_pid(c_pid):
+                        if self.native_supervisor.is_window_visible(h):
+                            target_hwnd = h
+                            self.webview_core.native_hwnd = h
+                            break
+                    if target_hwnd:
+                        break
+            except Exception:
+                pass
+
         if target_hwnd:
             native_obs = await self.native_extractor.observe_native_window(
                 session_id=self.session_id,

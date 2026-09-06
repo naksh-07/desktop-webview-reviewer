@@ -39,6 +39,39 @@ async def desktop_inspect_impl(
         )
 
         target_hwnd = session.target_window.hwnd if session.target_window else None
+        if not target_hwnd and session.native_supervisor:
+            target_pid = session.target_process.pid if session.target_process else None
+            if target_pid:
+                try:
+                    candidate_pids = {target_pid}
+                    import psutil
+                    proc = psutil.Process(target_pid)
+                    candidate_pids.update(c.pid for c in proc.children(recursive=True))
+                    for c_pid in candidate_pids:
+                        for h in session.native_supervisor.find_windows_by_pid(c_pid):
+                            if session.native_supervisor.is_window_visible(h):
+                                target_hwnd = h
+                                insp = session.native_supervisor.inspect_window(h)
+                                from runtime.target_manager import WindowIdentity
+                                session.target_window = WindowIdentity(
+                                    hwnd=h,
+                                    pid=insp.pid,
+                                    title=insp.title,
+                                    class_name=insp.class_name,
+                                    bounds=insp.bounds,
+                                    is_visible=insp.is_visible,
+                                    is_cloaked=insp.is_cloaked,
+                                    is_minimized=insp.is_minimized,
+                                    is_hung=insp.is_hung,
+                                )
+                                if session.webview_core:
+                                    session.webview_core.native_hwnd = h
+                                break
+                        if target_hwnd:
+                            break
+                except Exception:
+                    pass
+
         role_filter = {role} if role else None
 
         assert session.observation_engine is not None, "Observation engine not initialized"

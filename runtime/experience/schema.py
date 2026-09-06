@@ -20,9 +20,16 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
+from runtime.errors import DesktopAutomationException
+
 logger = logging.getLogger("desktop_webview.experience.schema")
 
 CURRENT_SCHEMA_VERSION = 4
+
+
+class SchemaMigrationException(DesktopAutomationException):
+    """Raised when schema migration or unsupported downgrade fails."""
+    pass
 
 MIGRATION_V1_STATEMENTS: List[str] = [
     # 1. Schema Migrations Log
@@ -536,6 +543,12 @@ def apply_migrations(conn: sqlite3.Connection) -> int:
     cursor = conn.cursor()
     cursor.execute("PRAGMA user_version;")
     current_version = cursor.fetchone()[0]
+
+    if current_version > CURRENT_SCHEMA_VERSION:
+        raise SchemaMigrationException(
+            f"Schema version v{current_version} is newer than current supported version v{CURRENT_SCHEMA_VERSION}; "
+            "schema downgrade is safely unsupported."
+        )
 
     applied_count = 0
 

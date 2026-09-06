@@ -805,6 +805,15 @@ class ActionExecutionEngine:
         if ref.plane == TargetPlane.WEBVIEW_DOM:
             if self.webview_core:
                 hwnd = self.webview_core.native_hwnd
+                if not hwnd and self.webview_core.native_pid and self.native_supervisor:
+                    try:
+                        for h in self.native_supervisor.find_windows_by_pid(self.webview_core.native_pid):
+                            if self.native_supervisor.is_window_visible(h):
+                                hwnd = h
+                                self.webview_core.native_hwnd = h
+                                break
+                    except Exception:
+                        pass
                 if self.webview_core.target_manager:
                     cdp_target = self.webview_core.target_manager.active_target_id
         else:

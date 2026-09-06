@@ -75,10 +75,10 @@ SPECULATIVE_MARKERS = [
 
 
 PROHIBITED_LEARNING_KEY_PATTERN = re.compile(
-    r"(?i)^(chain_of_thought|cot|hidden_thoughts?|reasoning.*|thought_process|"
+    r"(?i)^(chain_of_thought|cot|hidden_thoughts?|.*reasoning.*|thought_process|"
     r"raw_reasoning|model_transcript|unfiltered_prompt|prompt_archive|.*prompt.*|"
-    r"transcript|raw_transcript|password|passwd|api_?key|bearer_?token|auth_?token|"
-    r"jwt|cookie|cookies|private_?key|secret_?key)$"
+    r"transcript|.*transcript.*|password|passwd|api_?key|bearer_?token|auth_?token|"
+    r"jwt|cookie|cookies|private_?key|secret_?key|authorization.*)$"
 )
 
 
@@ -103,7 +103,6 @@ class LearningSafetyGate:
     _blocked_violations_count: int = 0
 
     @classmethod
-    @property
     def blocked_violations_count(cls) -> int:
         return cls._blocked_violations_count
 
