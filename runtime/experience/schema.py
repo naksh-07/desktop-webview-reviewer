@@ -22,7 +22,7 @@ from typing import Dict, List, Tuple
 
 logger = logging.getLogger("desktop_webview.experience.schema")
 
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 MIGRATION_V1_STATEMENTS: List[str] = [
     # 1. Schema Migrations Log
@@ -381,10 +381,148 @@ MIGRATION_V3_STATEMENTS: List[str] = [
     "CREATE INDEX IF NOT EXISTS idx_corr_ts ON agent_dwr_correlations(timestamp);",
 ]
 
+MIGRATION_V4_STATEMENTS: List[str] = [
+    # 19. Observations (Milestone 2.1 Prompt 4)
+    """
+    CREATE TABLE IF NOT EXISTS observations (
+        observation_id TEXT PRIMARY KEY,
+        observation_type TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'SESSION',
+        project_id TEXT,
+        session_id TEXT,
+        signature TEXT NOT NULL,
+        occurrence_count INTEGER NOT NULL DEFAULT 1,
+        confidence REAL NOT NULL DEFAULT 1.0,
+        status TEXT NOT NULL DEFAULT 'OBSERVED',
+        first_observed_at TEXT NOT NULL,
+        last_observed_at TEXT NOT NULL,
+        first_observed_ts REAL NOT NULL,
+        last_observed_ts REAL NOT NULL,
+        source_refs_json TEXT NOT NULL,
+        provenance_json TEXT NOT NULL,
+        details_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_obs_type ON observations(observation_type);",
+    "CREATE INDEX IF NOT EXISTS idx_obs_sig ON observations(signature);",
+    "CREATE INDEX IF NOT EXISTS idx_obs_scope ON observations(scope);",
+    "CREATE INDEX IF NOT EXISTS idx_obs_proj ON observations(project_id);",
+    "CREATE INDEX IF NOT EXISTS idx_obs_sess ON observations(session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_obs_ts ON observations(last_observed_ts);",
+
+    # 20. Detected Patterns
+    """
+    CREATE TABLE IF NOT EXISTS detected_patterns (
+        pattern_id TEXT PRIMARY KEY,
+        pattern_type TEXT NOT NULL,
+        signature TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'PROJECT',
+        project_id TEXT,
+        occurrence_count INTEGER NOT NULL,
+        session_count INTEGER NOT NULL,
+        confidence REAL NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        first_seen_ts REAL NOT NULL,
+        last_seen_ts REAL NOT NULL,
+        observation_refs_json TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        details_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_pat_type ON detected_patterns(pattern_type);",
+    "CREATE INDEX IF NOT EXISTS idx_pat_sig ON detected_patterns(signature);",
+    "CREATE INDEX IF NOT EXISTS idx_pat_scope ON detected_patterns(scope);",
+    "CREATE INDEX IF NOT EXISTS idx_pat_proj ON detected_patterns(project_id);",
+    "CREATE INDEX IF NOT EXISTS idx_pat_ts ON detected_patterns(last_seen_ts);",
+
+    # 21. Improvement Candidates
+    """
+    CREATE TABLE IF NOT EXISTS improvement_candidates (
+        candidate_id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL DEFAULT 'PROJECT',
+        project_id TEXT,
+        category TEXT NOT NULL,
+        affected_subsystem TEXT NOT NULL,
+        pattern_id TEXT,
+        evidence_count INTEGER NOT NULL,
+        session_count INTEGER NOT NULL,
+        confidence REAL NOT NULL,
+        risk_level TEXT NOT NULL,
+        status TEXT NOT NULL,
+        rationale_summary TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        gate_results_json TEXT NOT NULL,
+        provenance_json TEXT NOT NULL,
+        metadata_json TEXT
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_cand_status ON improvement_candidates(status);",
+    "CREATE INDEX IF NOT EXISTS idx_cand_cat ON improvement_candidates(category);",
+    "CREATE INDEX IF NOT EXISTS idx_cand_subsys ON improvement_candidates(affected_subsystem);",
+    "CREATE INDEX IF NOT EXISTS idx_cand_pat ON improvement_candidates(pattern_id);",
+    "CREATE INDEX IF NOT EXISTS idx_cand_scope ON improvement_candidates(scope);",
+    "CREATE INDEX IF NOT EXISTS idx_cand_proj ON improvement_candidates(project_id);",
+
+    # 22. Governance Records
+    """
+    CREATE TABLE IF NOT EXISTS governance_records (
+        governance_id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        decision_scope TEXT NOT NULL,
+        reviewer TEXT NOT NULL,
+        decision_timestamp REAL NOT NULL,
+        iso_timestamp TEXT NOT NULL,
+        rationale TEXT NOT NULL,
+        metadata_json TEXT,
+        FOREIGN KEY (candidate_id) REFERENCES improvement_candidates(candidate_id) ON DELETE CASCADE
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_gov_cand ON governance_records(candidate_id);",
+    "CREATE INDEX IF NOT EXISTS idx_gov_decision ON governance_records(decision);",
+    "CREATE INDEX IF NOT EXISTS idx_gov_ts ON governance_records(decision_timestamp);",
+
+    # 23. Durable Knowledge
+    """
+    CREATE TABLE IF NOT EXISTS durable_knowledge (
+        knowledge_id TEXT PRIMARY KEY,
+        version INTEGER NOT NULL DEFAULT 1,
+        scope TEXT NOT NULL DEFAULT 'PROJECT',
+        project_id TEXT,
+        candidate_id TEXT,
+        normalized_statement TEXT NOT NULL,
+        supporting_evidence_refs_json TEXT NOT NULL,
+        validation_metadata_json TEXT NOT NULL,
+        approval_metadata_json TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        review_due_at TEXT,
+        last_confirmed_at TEXT,
+        last_used_at TEXT,
+        superseded_by TEXT,
+        contradiction_count INTEGER NOT NULL DEFAULT 0,
+        provenance_json TEXT NOT NULL,
+        FOREIGN KEY (candidate_id) REFERENCES improvement_candidates(candidate_id) ON DELETE SET NULL
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_dur_status ON durable_knowledge(status);",
+    "CREATE INDEX IF NOT EXISTS idx_dur_scope ON durable_knowledge(scope);",
+    "CREATE INDEX IF NOT EXISTS idx_dur_proj ON durable_knowledge(project_id);",
+    "CREATE INDEX IF NOT EXISTS idx_dur_cand ON durable_knowledge(candidate_id);",
+    "CREATE INDEX IF NOT EXISTS idx_dur_review ON durable_knowledge(review_due_at);",
+]
+
 MIGRATIONS: Dict[int, Tuple[str, List[str]]] = {
     1: ("Baseline Experience Store schema v1", MIGRATION_V1_STATEMENTS),
     2: ("Failure normalization and recovery attempt tracking schema v2", MIGRATION_V2_STATEMENTS),
     3: ("Antigravity agent experience and DWR correlation bridge schema v3", MIGRATION_V3_STATEMENTS),
+    4: ("Learning, governance, and field intelligence schema v4", MIGRATION_V4_STATEMENTS),
 }
 
 

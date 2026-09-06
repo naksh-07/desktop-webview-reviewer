@@ -306,6 +306,49 @@ class LifecycleDoctor:
                 )
             )
 
+        # Check 10: Learning, Governance & Field Intelligence (Milestone 2.1 Prompt 4)
+        try:
+            from runtime.experience import ExperienceStore
+            from runtime.experience.learning import LearningSafetyGate, KnowledgeDecayEngine
+            store = ExperienceStore.get_default_store()
+            counts = store.get_record_counts()
+            candidates = store.get_improvement_candidates(limit=100)
+            pending_gov = [c for c in candidates if c.status.value in ("VALIDATION_REQUIRED", "CANDIDATE")]
+            durable_items = store.get_durable_knowledge(limit=100)
+            decay_engine = KnowledgeDecayEngine(store)
+            decay_eval = decay_engine.evaluate_staleness()
+
+            learning_details = {
+                "observations": counts.get("observations", 0),
+                "patterns": counts.get("detected_patterns", 0),
+                "improvement_candidates": counts.get("improvement_candidates", 0),
+                "governance_pending": len(pending_gov),
+                "durable_knowledge": len(durable_items),
+                "review_due": len(decay_eval.get("review_due", [])),
+                "stale_knowledge": len(decay_eval.get("stale", [])),
+                "privacy_violations_blocked": LearningSafetyGate.blocked_violations_count,
+            }
+            checks.append(
+                DoctorCheckResult(
+                    name="learning_and_governance",
+                    status="PASS",
+                    message=(
+                        f"Learning & Governance engine operational (obs: {learning_details['observations']}, "
+                        f"patterns: {learning_details['patterns']}, candidates: {learning_details['improvement_candidates']}, "
+                        f"pending review: {learning_details['governance_pending']}, durable: {learning_details['durable_knowledge']})."
+                    ),
+                    details=learning_details,
+                )
+            )
+        except Exception as e:
+            checks.append(
+                DoctorCheckResult(
+                    name="learning_and_governance",
+                    status="INFO",
+                    message=f"Learning & Governance status unavailable: {e}",
+                )
+            )
+
         return DoctorReport(
             passed=overall_passed,
             installed_version=vinfo.product_version,

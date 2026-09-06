@@ -156,6 +156,36 @@ def check_core_subsystems() -> Dict[str, Any]:
                 "message": f"Experience Store fallback: {exp_err}",
             }
 
+        # Milestone 2.1 Prompt 4: Learning & Governance Subsystem
+        try:
+            from runtime.experience.learning import LearningSafetyGate, KnowledgeDecayEngine
+            counts = exp_store.get_record_counts()
+            candidates = exp_store.get_improvement_candidates(limit=50)
+            pending_gov = [c for c in candidates if c.status.value in ("VALIDATION_REQUIRED", "CANDIDATE")]
+            durable_items = exp_store.get_durable_knowledge(limit=50)
+            decay_engine = KnowledgeDecayEngine(exp_store)
+            decay_eval = decay_engine.evaluate_staleness()
+
+            subsystems["learning_and_governance"] = {
+                "status": "PASS",
+                "message": f"Operational (obs: {counts.get('observations', 0)}, candidates: {counts.get('improvement_candidates', 0)}, pending: {len(pending_gov)}, durable: {len(durable_items)})",
+                "details": {
+                    "observations": counts.get("observations", 0),
+                    "patterns": counts.get("detected_patterns", 0),
+                    "improvement_candidates": counts.get("improvement_candidates", 0),
+                    "governance_pending": len(pending_gov),
+                    "durable_knowledge": len(durable_items),
+                    "review_due": len(decay_eval.get("review_due", [])),
+                    "stale_knowledge": len(decay_eval.get("stale", [])),
+                    "privacy_violations_blocked": LearningSafetyGate.blocked_violations_count,
+                },
+            }
+        except Exception as l_err:
+            subsystems["learning_and_governance"] = {
+                "status": "INFO",
+                "message": f"Learning & Governance: {l_err}",
+            }
+
         subsystems["imports"] = {"status": "PASS", "message": "All core modules imported successfully"}
     except Exception as e:
         all_passed = False
@@ -318,6 +348,9 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
     exp_details = core_res.get("experience_store", {})
     exp_status = exp_details.get("status", "PASS")
     print(f"Experience Store:     {exp_status:<10} ({exp_details.get('message', 'Ready')})")
+    learn_details = core_res.get("learning_and_governance", {})
+    learn_status = learn_details.get("status", "PASS")
+    print(f"Learning/Governance:  {learn_status:<10} ({learn_details.get('message', 'Ready')})")
     print("-" * 65)
     print("Host Engine Availability & Verification Status:")
     print(f"  QtWebEngine:        {qt_status:<15} [RUNTIME_VERIFIED on Windows]")
@@ -348,6 +381,17 @@ def run_doctor(verbose: bool = False, as_json: bool = False) -> int:
             recs = exp_data.get('record_counts', {})
             failures_cnt = recs.get('failures', 0) if 'failures' in recs else recs.get('normalized_failures', 0)
             print(f"    records:  {sum(recs.values())} total (sessions: {recs.get('sessions', 0)}, failures: {failures_cnt}, recoveries: {recs.get('recovery_attempts', 0)})")
+        learn_data = core_res.get("learning_and_governance", {}).get("details", {})
+        if learn_data:
+            print("  Learning & Governance:")
+            print(f"    observations:            {learn_data.get('observations', 0)}")
+            print(f"    patterns:                {learn_data.get('patterns', 0)}")
+            print(f"    improvement_candidates:  {learn_data.get('improvement_candidates', 0)}")
+            print(f"    governance_pending:      {learn_data.get('governance_pending', 0)}")
+            print(f"    durable_knowledge:       {learn_data.get('durable_knowledge', 0)}")
+            print(f"    review_due:              {learn_data.get('review_due', 0)}")
+            print(f"    stale_knowledge:         {learn_data.get('stale_knowledge', 0)}")
+            print(f"    privacy_blocks:          {learn_data.get('privacy_violations_blocked', 0)}")
         print("-" * 65)
 
     if overall_ready:

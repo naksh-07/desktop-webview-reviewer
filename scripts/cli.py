@@ -81,6 +81,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             sys.argv.pop(1)
             from scripts.update_cli import cmd_update
             return cmd_update(sys.argv[1:])
+        elif cmd in ("learning", "governance"):
+            sys.argv.pop(1)
+            from scripts.learning_cli import main as learning_main
+            return learning_main(sys.argv[1:])
         elif cmd in ("release-validate", "validate-release", "release"):
             sys.argv.pop(1)
             from scripts.release_validator import main as release_main
@@ -100,6 +104,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print("  certify          Multi-framework live adversarial certification matrix")
     print("  security-audit   Full 6-point repository and runtime security audit")
     print("  release-validate Deterministic 8-gate production release validation pipeline")
+    print("  learning         Governed learning lifecycle (list, inspect, validate, approve, reject, decay, field-intel)")
     print("  harness          Manage application-side Reviewer Test Harness (init, inspect, remove, validate-release)")
     print("  doctor           Run diagnostic environment check")
     print("  inspect          Inspect desktop window hierarchy and reality reconciliation")

@@ -66,6 +66,24 @@ from runtime.experience.schema import (
     CURRENT_SCHEMA_VERSION,
     apply_migrations,
 )
+from runtime.experience.learning.models import (
+    CandidateCategory,
+    CandidateStatus,
+    DetectedPatternRecord,
+    DurableKnowledgeRecord,
+    GateResult,
+    GovernanceDecision,
+    GovernanceRecord,
+    ImprovementCandidateRecord,
+    KnowledgeStatus,
+    ObservationRecord,
+    ObservationStatus,
+    ObservationType,
+    PatternType,
+    RiskLevel,
+)
+from runtime.experience.learning.field_intelligence import FieldIntelligenceEngine
+from runtime.experience.learning.safety_gate import LearningSafetyGate
 
 logger = logging.getLogger("desktop_webview.experience.store")
 
@@ -2035,6 +2053,629 @@ class ExperienceStore:
                     "corrections": counts.get("agent_corrections", 0),
                 }
 
+    # -------------------------------------------------------------------------
+    # Learning, Governance, and Durable Knowledge Operations (Milestone 2.1 Prompt 4)
+    # -------------------------------------------------------------------------
+
+    def record_observation(self, record: ObservationRecord) -> Optional[ObservationRecord]:
+        """Persists or updates an empirical observation record."""
+        validate_scope_promotion(record.scope)
+        clean_details = LearningSafetyGate.validate_learning_payload(record.details, context="observation.details")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                prov_dict = record.provenance.to_dict() if record.provenance else {}
+
+                # Check if observation already exists by observation_id or (signature, scope, project_id)
+                cursor.execute(
+                    "SELECT observation_id, occurrence_count, source_refs_json FROM observations WHERE observation_id = ? OR (signature = ? AND scope = ? AND (project_id = ? OR (project_id IS NULL AND ? IS NULL)));",
+                    (record.observation_id, record.signature, record.scope.value if isinstance(record.scope, ExperienceScope) else str(record.scope), record.project_id, record.project_id),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    existing_id, existing_count, existing_refs_json = existing
+                    existing_refs = json.loads(existing_refs_json) if existing_refs_json else []
+                    merged_refs = list(dict.fromkeys(existing_refs + record.source_refs))
+                    new_count = existing_count + record.occurrence_count
+                    cursor.execute(
+                        """
+                        UPDATE observations SET
+                            occurrence_count = ?,
+                            confidence = ?,
+                            status = ?,
+                            last_observed_at = ?,
+                            last_observed_ts = ?,
+                            source_refs_json = ?,
+                            details_json = ?
+                        WHERE observation_id = ?;
+                        """,
+                        (
+                            new_count,
+                            record.confidence,
+                            record.status.value if isinstance(record.status, ObservationStatus) else str(record.status),
+                            record.last_observed_at,
+                            record.last_observed_ts,
+                            json.dumps(merged_refs),
+                            json.dumps(clean_details),
+                            existing_id,
+                        ),
+                    )
+                    record.observation_id = existing_id
+                    record.occurrence_count = new_count
+                    record.source_refs = merged_refs
+                else:
+                    cursor.execute(
+                        """
+                        INSERT INTO observations (
+                            observation_id, observation_type, scope, project_id, session_id,
+                            signature, occurrence_count, confidence, status,
+                            first_observed_at, last_observed_at, first_observed_ts, last_observed_ts,
+                            source_refs_json, provenance_json, details_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        (
+                            record.observation_id,
+                            record.observation_type.value if isinstance(record.observation_type, ObservationType) else str(record.observation_type),
+                            record.scope.value if isinstance(record.scope, ExperienceScope) else str(record.scope),
+                            record.project_id,
+                            record.session_id,
+                            record.signature,
+                            record.occurrence_count,
+                            record.confidence,
+                            record.status.value if isinstance(record.status, ObservationStatus) else str(record.status),
+                            record.first_observed_at,
+                            record.last_observed_at,
+                            record.first_observed_ts,
+                            record.last_observed_ts,
+                            json.dumps(record.source_refs),
+                            json.dumps(prov_dict),
+                            json.dumps(clean_details),
+                        ),
+                    )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record observation %s: %s", record.observation_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record observation: {e}") from e
+                return None
+
+    def get_observations(
+        self,
+        signature: Optional[str] = None,
+        observation_type: Optional[Union[str, ObservationType]] = None,
+        scope: Optional[Union[str, ExperienceScope]] = None,
+        project_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ObservationRecord]:
+        """Retrieves observations with optional filtering."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM observations WHERE 1=1"
+                params: List[Any] = []
+                if signature:
+                    query += " AND signature = ?"
+                    params.append(signature)
+                if observation_type:
+                    ot = observation_type.value if isinstance(observation_type, ObservationType) else str(observation_type)
+                    query += " AND observation_type = ?"
+                    params.append(ot)
+                if scope:
+                    sc = scope.value if isinstance(scope, ExperienceScope) else str(scope)
+                    query += " AND scope = ?"
+                    params.append(sc)
+                if project_id:
+                    query += " AND (project_id = ? OR project_id IS NULL)"
+                    params.append(project_id)
+                query += " ORDER BY last_observed_ts DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                results = []
+                for r in rows:
+                    source_refs = json.loads(r["source_refs_json"]) if r["source_refs_json"] else []
+                    prov = json.loads(r["provenance_json"]) if r["provenance_json"] else None
+                    details = json.loads(r["details_json"]) if r["details_json"] else {}
+                    results.append(
+                        ObservationRecord(
+                            observation_id=r["observation_id"],
+                            observation_type=ObservationType(r["observation_type"]),
+                            signature=r["signature"],
+                            scope=ExperienceScope(r["scope"]),
+                            project_id=r["project_id"],
+                            session_id=r["session_id"],
+                            occurrence_count=r["occurrence_count"],
+                            confidence=r["confidence"],
+                            status=ObservationStatus(r["status"]),
+                            first_observed_at=r["first_observed_at"],
+                            last_observed_at=r["last_observed_at"],
+                            first_observed_ts=r["first_observed_ts"],
+                            last_observed_ts=r["last_observed_ts"],
+                            source_refs=source_refs,
+                            provenance=ProvenanceRecord.from_dict(prov) if prov else None,
+                            details=details,
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to query observations: %s", e)
+                return []
+
+    def record_pattern(self, record: DetectedPatternRecord) -> Optional[DetectedPatternRecord]:
+        """Persists or updates a detected pattern record."""
+        validate_scope_promotion(record.scope)
+        clean_details = LearningSafetyGate.validate_learning_payload(record.details, context="pattern.details")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO detected_patterns (
+                        pattern_id, pattern_type, signature, scope, project_id,
+                        occurrence_count, session_count, confidence,
+                        first_seen_at, last_seen_at, first_seen_ts, last_seen_ts,
+                        observation_refs_json, summary, details_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(pattern_id) DO UPDATE SET
+                        occurrence_count = excluded.occurrence_count,
+                        session_count = excluded.session_count,
+                        confidence = excluded.confidence,
+                        last_seen_at = excluded.last_seen_at,
+                        last_seen_ts = excluded.last_seen_ts,
+                        observation_refs_json = excluded.observation_refs_json,
+                        summary = excluded.summary,
+                        details_json = excluded.details_json;
+                    """,
+                    (
+                        record.pattern_id,
+                        record.pattern_type.value if isinstance(record.pattern_type, PatternType) else str(record.pattern_type),
+                        record.signature,
+                        record.scope.value if isinstance(record.scope, ExperienceScope) else str(record.scope),
+                        record.project_id,
+                        record.occurrence_count,
+                        record.session_count,
+                        record.confidence,
+                        record.first_seen_at,
+                        record.last_seen_at,
+                        record.first_seen_ts,
+                        record.last_seen_ts,
+                        json.dumps(record.observation_refs),
+                        record.summary,
+                        json.dumps(clean_details),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record pattern %s: %s", record.pattern_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record pattern: {e}") from e
+                return None
+
+    def get_patterns(
+        self,
+        pattern_type: Optional[Union[str, PatternType]] = None,
+        scope: Optional[Union[str, ExperienceScope]] = None,
+        project_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[DetectedPatternRecord]:
+        """Retrieves detected patterns with optional filtering."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM detected_patterns WHERE 1=1"
+                params: List[Any] = []
+                if pattern_type:
+                    pt = pattern_type.value if isinstance(pattern_type, PatternType) else str(pattern_type)
+                    query += " AND pattern_type = ?"
+                    params.append(pt)
+                if scope:
+                    sc = scope.value if isinstance(scope, ExperienceScope) else str(scope)
+                    query += " AND scope = ?"
+                    params.append(sc)
+                if project_id:
+                    query += " AND (project_id = ? OR project_id IS NULL)"
+                    params.append(project_id)
+                query += " ORDER BY occurrence_count DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                results = []
+                for r in rows:
+                    obs_refs = json.loads(r["observation_refs_json"]) if r["observation_refs_json"] else []
+                    details = json.loads(r["details_json"]) if r["details_json"] else {}
+                    results.append(
+                        DetectedPatternRecord(
+                            pattern_id=r["pattern_id"],
+                            pattern_type=PatternType(r["pattern_type"]),
+                            signature=r["signature"],
+                            summary=r["summary"],
+                            scope=ExperienceScope(r["scope"]),
+                            project_id=r["project_id"],
+                            occurrence_count=r["occurrence_count"],
+                            session_count=r["session_count"],
+                            confidence=r["confidence"],
+                            first_seen_at=r["first_seen_at"],
+                            last_seen_at=r["last_seen_at"],
+                            first_seen_ts=r["first_seen_ts"],
+                            last_seen_ts=r["last_seen_ts"],
+                            observation_refs=obs_refs,
+                            details=details,
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to query patterns: %s", e)
+                return []
+
+    def record_improvement_candidate(self, record: ImprovementCandidateRecord) -> Optional[ImprovementCandidateRecord]:
+        """Persists or updates an improvement candidate."""
+        validate_scope_promotion(record.scope)
+        clean_metadata = LearningSafetyGate.validate_learning_payload(record.metadata, context="candidate.metadata")
+        gates_dict = {k: v.to_dict() for k, v in record.gate_results.items()}
+        prov_dict = record.provenance.to_dict() if record.provenance else {}
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO improvement_candidates (
+                        candidate_id, scope, project_id, category, affected_subsystem, pattern_id,
+                        evidence_count, session_count, confidence, risk_level, status,
+                        rationale_summary, first_seen_at, last_seen_at, created_at, updated_at,
+                        gate_results_json, provenance_json, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(candidate_id) DO UPDATE SET
+                        evidence_count = excluded.evidence_count,
+                        session_count = excluded.session_count,
+                        confidence = excluded.confidence,
+                        risk_level = excluded.risk_level,
+                        status = excluded.status,
+                        rationale_summary = excluded.rationale_summary,
+                        last_seen_at = excluded.last_seen_at,
+                        updated_at = excluded.updated_at,
+                        gate_results_json = excluded.gate_results_json,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.candidate_id,
+                        record.scope.value if isinstance(record.scope, ExperienceScope) else str(record.scope),
+                        record.project_id,
+                        record.category.value if isinstance(record.category, CandidateCategory) else str(record.category),
+                        record.affected_subsystem,
+                        record.pattern_id,
+                        record.evidence_count,
+                        record.session_count,
+                        record.confidence,
+                        record.risk_level.value if isinstance(record.risk_level, RiskLevel) else str(record.risk_level),
+                        record.status.value if isinstance(record.status, CandidateStatus) else str(record.status),
+                        record.rationale_summary,
+                        record.first_seen_at,
+                        record.last_seen_at,
+                        record.created_at,
+                        record.updated_at,
+                        json.dumps(gates_dict),
+                        json.dumps(prov_dict),
+                        json.dumps(clean_metadata),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record improvement candidate %s: %s", record.candidate_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record improvement candidate: {e}") from e
+                return None
+
+    def get_improvement_candidates(
+        self,
+        status: Optional[Union[str, CandidateStatus]] = None,
+        category: Optional[Union[str, CandidateCategory]] = None,
+        scope: Optional[Union[str, ExperienceScope]] = None,
+        project_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[ImprovementCandidateRecord]:
+        """Retrieves improvement candidates with optional filtering."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM improvement_candidates WHERE 1=1"
+                params: List[Any] = []
+                if status:
+                    st = status.value if isinstance(status, CandidateStatus) else str(status)
+                    query += " AND status = ?"
+                    params.append(st)
+                if category:
+                    cat = category.value if isinstance(category, CandidateCategory) else str(category)
+                    query += " AND category = ?"
+                    params.append(cat)
+                if scope:
+                    sc = scope.value if isinstance(scope, ExperienceScope) else str(scope)
+                    query += " AND scope = ?"
+                    params.append(sc)
+                if project_id:
+                    query += " AND (project_id = ? OR project_id IS NULL)"
+                    params.append(project_id)
+                query += " ORDER BY evidence_count DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                results = []
+                for r in rows:
+                    gates_raw = json.loads(r["gate_results_json"]) if r["gate_results_json"] else {}
+                    gates = {k: GateResult.from_dict(v) for k, v in gates_raw.items()}
+                    prov = json.loads(r["provenance_json"]) if r["provenance_json"] else None
+                    metadata = json.loads(r["metadata_json"]) if r["metadata_json"] else {}
+                    results.append(
+                        ImprovementCandidateRecord(
+                            candidate_id=r["candidate_id"],
+                            scope=ExperienceScope(r["scope"]),
+                            project_id=r["project_id"],
+                            category=CandidateCategory(r["category"]),
+                            affected_subsystem=r["affected_subsystem"],
+                            pattern_id=r["pattern_id"],
+                            evidence_count=r["evidence_count"],
+                            session_count=r["session_count"],
+                            confidence=r["confidence"],
+                            risk_level=RiskLevel(r["risk_level"]),
+                            status=CandidateStatus(r["status"]),
+                            rationale_summary=r["rationale_summary"],
+                            first_seen_at=r["first_seen_at"],
+                            last_seen_at=r["last_seen_at"],
+                            created_at=r["created_at"],
+                            updated_at=r["updated_at"],
+                            gate_results=gates,
+                            provenance=ProvenanceRecord.from_dict(prov) if prov else None,
+                            metadata=metadata,
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to query improvement candidates: %s", e)
+                return []
+
+    def get_improvement_candidate(self, candidate_id: str) -> Optional[ImprovementCandidateRecord]:
+        """Looks up a single candidate by ID."""
+        candidates = self.get_improvement_candidates(limit=1000)
+        for c in candidates:
+            if c.candidate_id == candidate_id:
+                return c
+        return None
+
+    def record_governance_decision(self, record: GovernanceRecord) -> Optional[GovernanceRecord]:
+        """Persists a human governance decision."""
+        validate_scope_promotion(record.decision_scope)
+        clean_metadata = LearningSafetyGate.validate_learning_payload(record.metadata, context="governance.metadata")
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO governance_records (
+                        governance_id, candidate_id, decision, decision_scope, reviewer,
+                        decision_timestamp, iso_timestamp, rationale, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(governance_id) DO UPDATE SET
+                        decision = excluded.decision,
+                        rationale = excluded.rationale,
+                        metadata_json = excluded.metadata_json;
+                    """,
+                    (
+                        record.governance_id,
+                        record.candidate_id,
+                        record.decision.value if isinstance(record.decision, GovernanceDecision) else str(record.decision),
+                        record.decision_scope.value if isinstance(record.decision_scope, ExperienceScope) else str(record.decision_scope),
+                        record.reviewer,
+                        record.decision_timestamp,
+                        record.iso_timestamp,
+                        record.rationale,
+                        json.dumps(clean_metadata),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record governance decision %s: %s", record.governance_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record governance decision: {e}") from e
+                return None
+
+    def get_governance_records(self, candidate_id: Optional[str] = None, limit: int = 100) -> List[GovernanceRecord]:
+        """Queries governance decisions."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM governance_records WHERE 1=1"
+                params: List[Any] = []
+                if candidate_id:
+                    query += " AND candidate_id = ?"
+                    params.append(candidate_id)
+                query += " ORDER BY decision_timestamp DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                results = []
+                for r in rows:
+                    metadata = json.loads(r["metadata_json"]) if r["metadata_json"] else {}
+                    results.append(
+                        GovernanceRecord(
+                            governance_id=r["governance_id"],
+                            candidate_id=r["candidate_id"],
+                            decision=GovernanceDecision(r["decision"]),
+                            decision_scope=ExperienceScope(r["decision_scope"]),
+                            reviewer=r["reviewer"],
+                            decision_timestamp=r["decision_timestamp"],
+                            iso_timestamp=r["iso_timestamp"],
+                            rationale=r["rationale"],
+                            metadata=metadata,
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to query governance records: %s", e)
+                return []
+
+    def record_durable_knowledge(self, record: DurableKnowledgeRecord) -> Optional[DurableKnowledgeRecord]:
+        """Persists or updates durable knowledge item."""
+        validate_scope_promotion(record.scope)
+        prov_dict = record.provenance.to_dict() if record.provenance else {}
+
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO durable_knowledge (
+                        knowledge_id, version, scope, project_id, candidate_id,
+                        normalized_statement, supporting_evidence_refs_json, validation_metadata_json,
+                        approval_metadata_json, confidence, status,
+                        created_at, updated_at, review_due_at, last_confirmed_at, last_used_at,
+                        superseded_by, contradiction_count, provenance_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(knowledge_id) DO UPDATE SET
+                        version = excluded.version,
+                        normalized_statement = excluded.normalized_statement,
+                        supporting_evidence_refs_json = excluded.supporting_evidence_refs_json,
+                        validation_metadata_json = excluded.validation_metadata_json,
+                        approval_metadata_json = excluded.approval_metadata_json,
+                        confidence = excluded.confidence,
+                        status = excluded.status,
+                        updated_at = excluded.updated_at,
+                        review_due_at = excluded.review_due_at,
+                        last_confirmed_at = excluded.last_confirmed_at,
+                        last_used_at = excluded.last_used_at,
+                        superseded_by = excluded.superseded_by,
+                        contradiction_count = excluded.contradiction_count;
+                    """,
+                    (
+                        record.knowledge_id,
+                        record.version,
+                        record.scope.value if isinstance(record.scope, ExperienceScope) else str(record.scope),
+                        record.project_id,
+                        record.candidate_id,
+                        record.normalized_statement,
+                        json.dumps(record.supporting_evidence_refs),
+                        json.dumps(record.validation_metadata),
+                        json.dumps(record.approval_metadata),
+                        record.confidence,
+                        record.status.value if isinstance(record.status, KnowledgeStatus) else str(record.status),
+                        record.created_at,
+                        record.updated_at,
+                        record.review_due_at,
+                        record.last_confirmed_at,
+                        record.last_used_at,
+                        record.superseded_by,
+                        record.contradiction_count,
+                        json.dumps(prov_dict),
+                    ),
+                )
+                conn.commit()
+                self._last_write_iso = datetime.now(timezone.utc).isoformat()
+                return record
+            except Exception as e:
+                logger.error("Failed to record durable knowledge %s: %s", record.knowledge_id, e)
+                if not self.config.fail_safe_mode:
+                    raise ExperiencePersistenceException(f"Failed to record durable knowledge: {e}") from e
+                return None
+
+    def get_durable_knowledge(
+        self,
+        status: Optional[Union[str, KnowledgeStatus]] = None,
+        scope: Optional[Union[str, ExperienceScope]] = None,
+        project_id: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[DurableKnowledgeRecord]:
+        """Queries durable knowledge items."""
+        with self._lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                query = "SELECT * FROM durable_knowledge WHERE 1=1"
+                params: List[Any] = []
+                if status:
+                    st = status.value if isinstance(status, KnowledgeStatus) else str(status)
+                    query += " AND status = ?"
+                    params.append(st)
+                if scope:
+                    sc = scope.value if isinstance(scope, ExperienceScope) else str(scope)
+                    query += " AND scope = ?"
+                    params.append(sc)
+                if project_id:
+                    query += " AND (project_id = ? OR project_id IS NULL)"
+                    params.append(project_id)
+                query += " ORDER BY updated_at DESC LIMIT ?;"
+                params.append(limit)
+
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                results = []
+                for r in rows:
+                    supp = json.loads(r["supporting_evidence_refs_json"]) if r["supporting_evidence_refs_json"] else []
+                    val_meta = json.loads(r["validation_metadata_json"]) if r["validation_metadata_json"] else {}
+                    app_meta = json.loads(r["approval_metadata_json"]) if r["approval_metadata_json"] else {}
+                    prov = json.loads(r["provenance_json"]) if r["provenance_json"] else None
+                    results.append(
+                        DurableKnowledgeRecord(
+                            knowledge_id=r["knowledge_id"],
+                            normalized_statement=r["normalized_statement"],
+                            version=r["version"],
+                            scope=ExperienceScope(r["scope"]),
+                            project_id=r["project_id"],
+                            candidate_id=r["candidate_id"],
+                            supporting_evidence_refs=supp,
+                            validation_metadata=val_meta,
+                            approval_metadata=app_meta,
+                            confidence=r["confidence"],
+                            status=KnowledgeStatus(r["status"]),
+                            created_at=r["created_at"],
+                            updated_at=r["updated_at"],
+                            review_due_at=r["review_due_at"],
+                            last_confirmed_at=r["last_confirmed_at"],
+                            last_used_at=r["last_used_at"],
+                            superseded_by=r["superseded_by"],
+                            contradiction_count=r["contradiction_count"],
+                            provenance=ProvenanceRecord.from_dict(prov) if prov else None,
+                        )
+                    )
+                return results
+            except Exception as e:
+                logger.error("Failed to query durable knowledge: %s", e)
+                return []
+
+    def get_durable_knowledge_item(self, knowledge_id: str) -> Optional[DurableKnowledgeRecord]:
+        """Looks up a single durable knowledge item by ID."""
+        items = self.get_durable_knowledge(limit=1000)
+        for it in items:
+            if it.knowledge_id == knowledge_id:
+                return it
+        return None
+
+    def get_field_intelligence_engine(self) -> FieldIntelligenceEngine:
+        """Returns a FieldIntelligenceEngine bound to this store's database connection."""
+        return FieldIntelligenceEngine(conn_provider=self._get_connection)
+
     def get_record_counts(self) -> Dict[str, int]:
         """Returns row counts across all experience tables."""
         counts = {
@@ -2053,6 +2694,11 @@ class ExperienceStore:
             "agent_artifacts": 0,
             "agent_corrections": 0,
             "agent_dwr_correlations": 0,
+            "observations": 0,
+            "detected_patterns": 0,
+            "improvement_candidates": 0,
+            "governance_records": 0,
+            "durable_knowledge": 0,
         }
         with self._lock:
             try:
@@ -2074,6 +2720,11 @@ class ExperienceStore:
                     ("agent_artifacts", "agent_artifacts"),
                     ("agent_corrections", "agent_corrections"),
                     ("agent_dwr_correlations", "agent_dwr_correlations"),
+                    ("observations", "observations"),
+                    ("detected_patterns", "detected_patterns"),
+                    ("improvement_candidates", "improvement_candidates"),
+                    ("governance_records", "governance_records"),
+                    ("durable_knowledge", "durable_knowledge"),
                 ]:
                     try:
                         cursor.execute(f"SELECT COUNT(*) FROM {table};")

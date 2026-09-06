@@ -354,5 +354,27 @@ def register_all_resources(server: MCPServer, bridge: RuntimeBridge) -> None:
         except Exception:
             pass
 
+        try:
+            from runtime.experience.learning import LearningSafetyGate, KnowledgeDecayEngine
+            counts = exp_store.get_record_counts()
+            candidates = exp_store.get_improvement_candidates(limit=100)
+            pending_gov = [c for c in candidates if c.status.value in ("VALIDATION_REQUIRED", "CANDIDATE")]
+            durable_items = exp_store.get_durable_knowledge(limit=100)
+            decay_engine = KnowledgeDecayEngine(exp_store)
+            decay_eval = decay_engine.evaluate_staleness()
+
+            payload["learning_and_governance"] = {
+                "observations": counts.get("observations", 0),
+                "patterns": counts.get("detected_patterns", 0),
+                "improvement_candidates": counts.get("improvement_candidates", 0),
+                "governance_pending": len(pending_gov),
+                "durable_knowledge": len(durable_items),
+                "review_due": len(decay_eval.get("review_due", [])),
+                "stale_knowledge": len(decay_eval.get("stale", [])),
+                "privacy_violations_blocked": LearningSafetyGate.blocked_violations_count,
+            }
+        except Exception:
+            pass
+
         return json.dumps(payload, indent=2)
 
