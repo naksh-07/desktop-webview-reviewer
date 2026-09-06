@@ -87,7 +87,7 @@ def cmd_list(store: ExperienceStore, args: argparse.Namespace) -> int:
         cid_short = c.candidate_id[:12] + ".." if len(c.candidate_id) > 14 else c.candidate_id
         line = (
             f"{cid_short:<14} {c.status.value:<20} {c.scope.value:<9} "
-            f"{c.evidence_count:<5} {c.session_count:<5} {c.confidence:<6.2f} {c.candidate_category.value}"
+            f"{c.evidence_count:<5} {c.session_count:<5} {c.confidence:<6.2f} {c.category.value}"
         )
         print(line)
         print(f"   Rationale: {c.rationale_summary}")
@@ -120,7 +120,7 @@ def cmd_inspect(store: ExperienceStore, args: argparse.Namespace) -> int:
     print("=" * 80)
     print(f"  Candidate Details: {candidate.candidate_id}")
     print("=" * 80)
-    print(f"Category:            {candidate.candidate_category.value}")
+    print(f"Category:            {candidate.category.value}")
     print(f"Status:              {candidate.status.value}")
     print(f"Scope:               {candidate.scope.value}")
     print(f"Affected Subsystem:  {candidate.affected_subsystem}")
@@ -128,10 +128,11 @@ def cmd_inspect(store: ExperienceStore, args: argparse.Namespace) -> int:
     print(f"Confidence:          {candidate.confidence:.2f}")
     print(f"Evidence Count:      {candidate.evidence_count}")
     print(f"Session Count:       {candidate.session_count}")
-    print(f"First Seen:          {candidate.first_seen_timestamp}")
-    print(f"Last Seen:           {candidate.last_seen_timestamp}")
+    print(f"First Seen:          {candidate.first_seen_at}")
+    print(f"Last Seen:           {candidate.last_seen_at}")
     print(f"Pattern Reference:   {candidate.pattern_id}")
-    print(f"Observations ({len(candidate.observation_ids)}): {', '.join(candidate.observation_ids[:5])}...")
+    obs_refs = candidate.metadata.get("observation_refs", [])
+    print(f"Observations ({len(obs_refs)}): {', '.join(obs_refs[:5])}...")
     print(f"Rationale:           {candidate.rationale_summary}")
     print("-" * 80)
     print("Evidence Gates & Safety Invariants:")
@@ -208,7 +209,7 @@ def cmd_approve(store: ExperienceStore, args: argparse.Namespace) -> int:
             "governance_record_id": gov_rec.record_id,
             "status": durable.status.value,
             "normalized_statement": durable.normalized_statement,
-            "review_due_timestamp": durable.review_due_timestamp,
+            "review_due_timestamp": durable.review_due_at,
         }, indent=2))
         return 0
 
@@ -220,7 +221,7 @@ def cmd_approve(store: ExperienceStore, args: argparse.Namespace) -> int:
     print(f"Reviewer:         {gov_rec.reviewer_id}")
     print(f"Scope:            {durable.scope.value}")
     print(f"Decision:         {gov_rec.decision.value}")
-    print(f"Review Due:       {durable.review_due_timestamp}")
+    print(f"Review Due:       {durable.review_due_at}")
     print(f"Statement:        {durable.normalized_statement}")
     print("=" * 80)
     return 0

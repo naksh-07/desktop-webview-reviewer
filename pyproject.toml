@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "desktop-webview-reviewer"
-version = "2.0.0b1"
+version = "2.0.0b2"
 description = "Universal desktop application webview testing, inspection, and verification capability."
 readme = "README.md"
 requires-python = ">=3.10"

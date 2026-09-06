@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 
 PRODUCT_NAME: str = "Desktop WebView Reviewer"
 PACKAGE_NAME: str = "desktop-webview-reviewer"
-PRODUCT_VERSION: str = "2.0.0b1"  # Canonical codebase baseline version
+PRODUCT_VERSION: str = "2.0.0b2"  # Canonical codebase baseline version
 
 
 @dataclass(frozen=True)
@@ -106,17 +106,17 @@ def _resolve_installation_source(repo_root: Path) -> str:
 
 def _resolve_mcp_executable() -> Optional[str]:
     """Finds the desktop-webview-mcp executable path if discoverable."""
-    # Check PATH first
-    mcp_path = shutil.which("desktop-webview-mcp")
-    if mcp_path:
-        return mcp_path
-
-    # Check same directory as current Python executable (e.g. .venv/Scripts)
+    # Check same directory as current Python executable first (e.g. .venv/Scripts or venv/bin)
     py_dir = Path(sys.executable).parent
     for candidate in ("desktop-webview-mcp.exe", "desktop-webview-mcp"):
         p = py_dir / candidate
         if p.is_file():
-            return str(p)
+            return str(p.resolve())
+
+    # Fall back to PATH search
+    mcp_path = shutil.which("desktop-webview-mcp")
+    if mcp_path:
+        return str(Path(mcp_path).resolve())
 
     return None
 
@@ -140,16 +140,17 @@ def get_version_info() -> VersionInfo:
     """Returns authoritative VersionInfo representing active product runtime."""
     repo_root = Path(__file__).resolve().parent.parent
 
+    inst_source = _resolve_installation_source(repo_root)
     pkg_version = _resolve_package_version()
-    # If package version is discoverable, runtime matches package; else canonical version
-    prod_version = pkg_version if pkg_version else PRODUCT_VERSION
+    # In source checkout, PRODUCT_VERSION is authoritative; in installed package, metadata matches
+    prod_version = PRODUCT_VERSION if inst_source == "source_checkout" else (pkg_version or PRODUCT_VERSION)
 
     return VersionInfo(
         product_name=PRODUCT_NAME,
         product_version=prod_version,
         package_version=pkg_version,
         git_commit=_resolve_git_commit(repo_root),
-        installation_source=_resolve_installation_source(repo_root),
+        installation_source=inst_source,
         runtime_path=str(Path(sys.executable).resolve()),
         mcp_executable=_resolve_mcp_executable(),
         skill_installation_path=_resolve_skill_path(repo_root),

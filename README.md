@@ -1,13 +1,13 @@
 # Desktop WebView Reviewer
 
-[![Version](https://img.shields.io/badge/version-2.0.0b1-blue.svg)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-2.0.0b2-blue.svg)](pyproject.toml)
 [![Verdict](https://img.shields.io/badge/verdict-PASS-brightgreen.svg)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
 [![Status](https://img.shields.io/badge/status-beta--released-orange.svg)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
 [![Architecture](https://img.shields.io/badge/architecture-Architecture%20H-purple.svg)](docs/architecture/11_FINAL_ARCHITECTURE_DECISION.md)
 [![MCP](https://img.shields.io/badge/mcp-control--plane-orange.svg)](docs/architecture/14_MCP_INTERFACE_SPEC.md)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-red.svg)](LICENSE)
 
-**Desktop WebView Reviewer 2.0 (First Beta Release)** is an agent-native automation, inspection, and forensic-review system for hybrid Windows desktop applications hosting embedded web surfaces (QtWebEngine, Microsoft Edge WebView2, Electron, CEF/Chromium). Architecture H is frozen, exactly 12 primary MCP tools are exposed, and comprehensive lifecycle/versioning/update/rollback infrastructure is implemented. Platform scope is strictly Windows-first (Windows 10/11 64-bit).
+**Desktop WebView Reviewer 2.0.0b2 (Second Beta Release)** is an agent-native automation, inspection, and forensic-review system for hybrid Windows desktop applications hosting embedded web surfaces (QtWebEngine, Microsoft Edge WebView2, Electron, CEF/Chromium). Architecture H is frozen, exactly 12 primary MCP tools are exposed, and comprehensive lifecycle/versioning/update/rollback infrastructure is implemented. Platform scope is strictly Windows-first (Windows 10/11 64-bit).
 
 ---
 
@@ -247,7 +247,7 @@ Desktop WebView Reviewer 2.1 introduces a local, durable, schema-versioned **Exp
 
 ---
 
-**Status:** `2.0.0b1 FIRST BETA RELEASE (VERDICT: PASS)`  
+**Status:** `2.0.0b2 SECOND BETA RELEASE (VERDICT: PASS)`  
 - **Architecture H Frozen:** Exactly 12 primary MCP tools, decoupled supervisory daemon, zero hidden God-agent loops.
 - **Platform Scope:** Windows-first (Windows 10 Build 19041+ / Windows 11 64-bit).
 - **Verified Real Runtimes:** QtWebEngine (Anki Maths), Electron, and Microsoft Edge WebView2.

@@ -5,6 +5,32 @@ All notable changes to the `desktop-webview-reviewer` skill are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0b2] - 2026-09-06
+
+### Second Beta Release — Release Identity, Distribution Integrity & Final Beta Certification
+- **Release Version Identity & Authority**:
+  - Authoritative canonical version transitioned to `2.0.0b2` (PEP 440 compliant) across `core/version.py`, `pyproject.toml`, and runtime contracts.
+  - Package distribution metadata strictly reports `2.0.0b2` for both wheel (`desktop_webview_reviewer-2.0.0b2-py3-none-any.whl`) and source distribution (`desktop_webview_reviewer-2.0.0b2.tar.gz`).
+  - Architecture H remains frozen; exactly 12 primary MCP tools exposed and unchanged.
+  - This release is a beta candidate (`2.0.0b2`); it is not labeled as stable `2.0.0`, nor does it introduce a `2.1.x` line.
+- **Dynamic Release Validation Pipeline** (`scripts/release_validator.py`):
+  - Eliminated static substring checks around `"2.0.0"` in artifact inspection.
+  - Expected version is programmatically derived from the authoritative runtime contract (`core.version.get_version_info().product_version`).
+  - Programmatic verification of wheel and sdist artifact names, internal `.dist-info/METADATA`, and internal `PKG-INFO` version headers.
+  - Added dedicated **Gate 8: Clean Isolated Environment Verification**: builds and installs the wheel in an isolated temporary virtual environment and executes out-of-tree smoke verification of package imports, version contracts, CLI invocation, Doctor diagnostics, and the MCP 7-point self-test.
+- **Skill Compatibility Boundary**:
+  - Bounded skill compatibility range to `">=2.0.0a0,<2.1.0"` across repository and global Antigravity skill metadata.
+  - Disclaims compatibility with unrelated future 2.1.x runtimes while ensuring seamless operation on the active `2.0.x` beta series.
+- **Static Analysis & Runtime Hardening**:
+  - Resolved pyright type checking omissions in `runtime/experience/learning/decay.py`, `runtime/experience/learning/field_intelligence.py`, `scripts/doctor.py`, `scripts/desktop_inspect.py`, and `scripts/learning_cli.py`.
+  - Prioritized active Python environment directory over PATH in `_resolve_mcp_executable()` to eliminate cross-environment executable hijacking.
+- **Preserved Release Invariants**:
+  - Exactly 12 primary MCP tools unchanged.
+  - Architecture H frozen.
+  - Experience Store, Learning, Governance, and Recovery subsystems unchanged in architecture and capability.
+
+---
+
 ## [2.0.0b1] - 2026-09-06
 
 ### First Beta Release — Architecture H Frozen & Lifecycle Subsystem

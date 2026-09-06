@@ -141,6 +141,7 @@ def check_core_subsystems() -> Dict[str, Any]:
         subsystems["forensics"] = {"status": "PASS", "message": "Win32 GUI forensics engine ready"}
 
         # Desktop WebView Reviewer 2.1 Experience Store foundation
+        exp_store = None
         try:
             from runtime.experience import ExperienceStore
             exp_store = ExperienceStore.get_default_store()
@@ -158,13 +159,19 @@ def check_core_subsystems() -> Dict[str, Any]:
 
         # Milestone 2.1 Prompt 4: Learning & Governance Subsystem
         try:
-            from runtime.experience.learning import LearningSafetyGate, KnowledgeDecayEngine
-            counts = exp_store.get_record_counts()
-            candidates = exp_store.get_improvement_candidates(limit=50)
-            pending_gov = [c for c in candidates if c.status.value in ("VALIDATION_REQUIRED", "CANDIDATE")]
-            durable_items = exp_store.get_durable_knowledge(limit=50)
-            decay_engine = KnowledgeDecayEngine(exp_store)
-            decay_eval = decay_engine.evaluate_staleness()
+            if exp_store is not None:
+                from runtime.experience.learning import LearningSafetyGate, KnowledgeDecayEngine
+                counts = exp_store.get_record_counts()
+                candidates = exp_store.get_improvement_candidates(limit=50)
+                pending_gov = [c for c in candidates if c.status.value in ("VALIDATION_REQUIRED", "CANDIDATE")]
+                durable_items = exp_store.get_durable_knowledge(limit=50)
+                decay_engine = KnowledgeDecayEngine(exp_store)
+                decay_eval = decay_engine.evaluate_staleness()
+            else:
+                counts = {}
+                pending_gov = []
+                durable_items = []
+                decay_eval = {}
 
             subsystems["learning_and_governance"] = {
                 "status": "PASS",

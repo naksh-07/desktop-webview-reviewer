@@ -47,7 +47,10 @@ async def run_inspect(hwnd: int | None, reality: bool, json_output: bool) -> Non
             print(f"Reconciled Targets: {len(reality_snap.targets)}")
             print(f"Contradictions: {len(reality_snap.contradictions)}")
             for c in reality_snap.contradictions:
-                print(f"  [CONTRADICTION] {c.get('type')}: {c.get('description')}")
+                if isinstance(c, dict):
+                    print(f"  [CONTRADICTION] {c.get('type', 'GENERAL')}: {c.get('description', str(c))}")
+                else:
+                    print(f"  [CONTRADICTION] {c}")
             print("\nReconciled Elements:")
             for t in reality_snap.targets[:20]:
                 print(f"  {t.reference}: role={t.role} name='{t.name}' visible={t.is_physically_visible} actionable={t.actionability.is_actionable}")

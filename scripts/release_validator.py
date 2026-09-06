@@ -86,15 +86,16 @@ class ProductionReleaseValidator:
         stages: List[StageResult] = []
         overall_verdict = "PASS"
 
+        ver_str = get_version_info().product_version
         print("=" * 70)
-        print("  DESKTOP WEBVIEW REVIEWER 2.0 - FIRST BETA RELEASE PIPELINE")
+        print(f"  DESKTOP WEBVIEW REVIEWER {ver_str} - BETA RELEASE PIPELINE")
         print("=" * 70)
 
         # ---------------------------------------------------------------------
         # Gate 1: SOURCE AUDIT
         # ---------------------------------------------------------------------
         g1_start = time.time()
-        print("\n[Gate 1/8] Executing SOURCE AUDIT...")
+        print("\n[Gate 1/9] Executing SOURCE AUDIT...")
         from scripts.security_audit import SecurityAuditor
         auditor = SecurityAuditor(repo_root=self.repo_root)
         sec_report = auditor.run_full_audit()
@@ -122,7 +123,7 @@ class ProductionReleaseValidator:
         # Gate 2: TEST SUITE (All repository tests)
         # ---------------------------------------------------------------------
         g2_start = time.time()
-        print("\n[Gate 2/8] Executing COMPLETE TEST SUITE...")
+        print("\n[Gate 2/9] Executing COMPLETE TEST SUITE...")
         cmd_tests = [self.python_bin, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
         res_tests = subprocess.run(cmd_tests, cwd=str(self.repo_root), capture_output=True, text=True)
         g2_dur = time.time() - g2_start
@@ -149,7 +150,7 @@ class ProductionReleaseValidator:
         # Gate 3: REAL-APP CERTIFICATION MATRIX
         # ---------------------------------------------------------------------
         g3_start = time.time()
-        print("\n[Gate 3/8] Checking REAL-APP CERTIFICATION MATRIX...")
+        print("\n[Gate 3/9] Checking REAL-APP CERTIFICATION MATRIX...")
         cert_file = self.repo_root / "evidence" / "certification" / "certification_matrix.json"
         if not cert_file.exists():
             subprocess.run([self.python_bin, "scripts/certify.py"], cwd=str(self.repo_root), capture_output=True)
@@ -195,7 +196,7 @@ class ProductionReleaseValidator:
         # Gate 4: ADVERSARIAL SECURITY (Dedicated 28 Categories)
         # ---------------------------------------------------------------------
         g4_start = time.time()
-        print("\n[Gate 4/8] Executing ADVERSARIAL SECURITY CERTIFICATION...")
+        print("\n[Gate 4/9] Executing ADVERSARIAL SECURITY CERTIFICATION...")
         cmd_adv = [self.python_bin, "-m", "unittest", "tests.test_phase19_adversarial_certification"]
         res_adv = subprocess.run(cmd_adv, cwd=str(self.repo_root), capture_output=True, text=True)
         g4_dur = time.time() - g4_start
@@ -222,7 +223,7 @@ class ProductionReleaseValidator:
         # Gate 5: HARNESS RELEASE SECURITY
         # ---------------------------------------------------------------------
         g5_start = time.time()
-        print("\n[Gate 5/8] Validating HARNESS RELEASE SEGREGATION...")
+        print("\n[Gate 5/9] Validating HARNESS RELEASE SEGREGATION...")
         from runtime.harness.build_pipeline import ReleaseSecurityValidator
         harness_res = ReleaseSecurityValidator.scan_artifact(self.repo_root / "adapters")
         g5_dur = time.time() - g5_start
@@ -249,7 +250,7 @@ class ProductionReleaseValidator:
         # Gate 6: PACKAGE BUILD
         # ---------------------------------------------------------------------
         g6_start = time.time()
-        print("\n[Gate 6/8] Building PRODUCTION WHEEL & SDIST...")
+        print("\n[Gate 6/9] Building PRODUCTION WHEEL & SDIST...")
         dist_dir = self.repo_root / "dist"
         dist_dir.mkdir(parents=True, exist_ok=True)
         for f in dist_dir.glob("*"):
@@ -290,12 +291,21 @@ class ProductionReleaseValidator:
             print("  -> FAIL: Package build failed.")
 
         # ---------------------------------------------------------------------
-        # Gate 7: PACKAGE ARTIFACT INSPECTION
+        # Gate 7: PACKAGE ARTIFACT INSPECTION (Authoritative dynamic version derivation)
         # ---------------------------------------------------------------------
         g7_start = time.time()
-        print("\n[Gate 7/8] Inspecting RELEASE ARTIFACTS...")
+        expected_ver = get_version_info().product_version
+        print(f"\n[Gate 7/9] Inspecting RELEASE ARTIFACTS for version '{expected_ver}'...")
         artifact_manifests: List[Dict[str, Any]] = []
         inspection_violations: List[str] = []
+
+        whl_files = [f for f in built_files if f.suffix == ".whl"]
+        sdist_files = [f for f in built_files if f.name.endswith(".tar.gz")]
+
+        if not whl_files:
+            inspection_violations.append("Missing required wheel (.whl) build artifact.")
+        if not sdist_files:
+            inspection_violations.append("Missing required sdist (.tar.gz) build artifact.")
 
         for art_path in built_files:
             file_bytes = art_path.read_bytes()
@@ -303,12 +313,48 @@ class ProductionReleaseValidator:
             size_kb = len(file_bytes) / 1024.0
 
             file_names_inside: List[str] = []
+            pkg_metadata_version: Optional[str] = None
+
             if art_path.suffix == ".whl":
                 with zipfile.ZipFile(art_path, "r") as z:
                     file_names_inside = z.namelist()
+                    for fname in file_names_inside:
+                        if fname.endswith(".dist-info/METADATA"):
+                            metadata_content = z.read(fname).decode("utf-8")
+                            for line in metadata_content.splitlines():
+                                if line.startswith("Version:"):
+                                    pkg_metadata_version = line.split(":", 1)[1].strip()
+                                    break
+                expected_prefix = f"desktop_webview_reviewer-{expected_ver}-"
+                if not art_path.name.startswith(expected_prefix):
+                    inspection_violations.append(
+                        f"Wheel filename '{art_path.name}' does not reflect authoritative version '{expected_ver}'."
+                    )
+                if pkg_metadata_version != expected_ver:
+                    inspection_violations.append(
+                        f"Wheel METADATA version '{pkg_metadata_version}' does not match authoritative version '{expected_ver}'."
+                    )
             elif art_path.name.endswith(".tar.gz"):
                 with tarfile.open(art_path, "r:gz") as t:
                     file_names_inside = t.getnames()
+                    for m in t.getmembers():
+                        if m.name.endswith("/PKG-INFO") or m.name == "PKG-INFO":
+                            extracted = t.extractfile(m)
+                            if extracted:
+                                pkg_info_content = extracted.read().decode("utf-8")
+                                for line in pkg_info_content.splitlines():
+                                    if line.startswith("Version:"):
+                                        pkg_metadata_version = line.split(":", 1)[1].strip()
+                                        break
+                expected_sdist = f"desktop_webview_reviewer-{expected_ver}.tar.gz"
+                if art_path.name != expected_sdist:
+                    inspection_violations.append(
+                        f"Sdist filename '{art_path.name}' does not match expected '{expected_sdist}'."
+                    )
+                if pkg_metadata_version != expected_ver:
+                    inspection_violations.append(
+                        f"Sdist PKG-INFO version '{pkg_metadata_version}' does not match authoritative version '{expected_ver}'."
+                    )
 
             # Verify no tests, fixtures, or harness files inside package
             forbidden_in_package = ["tests/", "fixtures/", "evidence/", ".dev.js", "reviewer_harness"]
@@ -317,15 +363,12 @@ class ProductionReleaseValidator:
                     if forb in fname:
                         inspection_violations.append(f"Forbidden path '{fname}' packaged inside {art_path.name}")
 
-            # Verify version in artifact name
-            if "2.0.0" not in art_path.name:
-                inspection_violations.append(f"Artifact {art_path.name} does not reflect 2.0.0 version.")
-
             artifact_manifests.append({
                 "filename": art_path.name,
                 "sha256": file_sha256,
                 "size_kb": round(size_kb, 2),
                 "total_files": len(file_names_inside),
+                "metadata_version": pkg_metadata_version,
             })
 
         g7_dur = time.time() - g7_start
@@ -333,11 +376,11 @@ class ProductionReleaseValidator:
             stages.append(StageResult(
                 stage_name="7_PACKAGE_INSPECTION",
                 verdict="PASS",
-                details=f"All {len(artifact_manifests)} release artifacts verified clean of test fixtures and harness code.",
+                details=f"All {len(artifact_manifests)} release artifacts verified clean and matching version {expected_ver}.",
                 duration_sec=g7_dur,
                 metadata={"artifacts": artifact_manifests},
             ))
-            print(f"  -> PASS: Artifact inspection clean ({len(artifact_manifests)} files verified).")
+            print(f"  -> PASS: Artifact inspection clean ({len(artifact_manifests)} files verified for v{expected_ver}).")
         else:
             overall_verdict = "FAIL"
             stages.append(StageResult(
@@ -350,24 +393,158 @@ class ProductionReleaseValidator:
             print(f"  -> FAIL: Artifact inspection violations: {inspection_violations}")
 
         # ---------------------------------------------------------------------
-        # Gate 8: FINAL RELEASE GATE
+        # Gate 8: CLEAN ISOLATED ENVIRONMENT INSTALLATION & SMOKE VALIDATION
         # ---------------------------------------------------------------------
-        print("\n[Gate 8/8] Evaluating FINAL RELEASE GATE...")
-        g8_dur = time.time() - start_time
+        g8_start = time.time()
+        print("\n[Gate 8/9] Executing CLEAN ISOLATED ENVIRONMENT VERIFICATION...")
+        clean_install_violations: List[str] = []
+        whl_target = whl_files[0] if whl_files else None
+
+        if whl_target and whl_target.exists():
+            with tempfile.TemporaryDirectory() as td:
+                temp_dir = Path(td)
+                venv_dir = temp_dir / "clean_venv"
+                try:
+                    # Create isolated venv
+                    subprocess.run(
+                        ["uv", "venv", str(venv_dir)],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    py_exe = venv_dir / "Scripts" / "python.exe" if os.name == "nt" else venv_dir / "bin" / "python"
+                    if not py_exe.exists():
+                        clean_install_violations.append(f"Isolated Python executable not found at {py_exe}")
+                    else:
+                        # Install wheel into isolated environment
+                        subprocess.run(
+                            ["uv", "pip", "install", str(whl_target), "--python", str(py_exe)],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        )
+
+                        # Check 1: Out-of-tree import and version consistency
+                        smoke_code = f"""
+import sys, importlib.metadata
+from pathlib import Path
+from core.version import get_version_info, __version__, PRODUCT_VERSION
+
+info = get_version_info()
+assert info.product_version == '{expected_ver}', f'Product version mismatch: {{info.product_version}} != {expected_ver}'
+assert info.installation_source in ('installed_package', 'direct_wheel'), f'Unexpected installation source: {{info.installation_source}}'
+assert __version__ == '{expected_ver}', f'__version__ mismatch: {{__version__}} != {expected_ver}'
+assert PRODUCT_VERSION == '{expected_ver}', f'PRODUCT_VERSION mismatch: {{PRODUCT_VERSION}} != {expected_ver}'
+pkg_ver = importlib.metadata.version('desktop-webview-reviewer')
+assert pkg_ver == '{expected_ver}', f'Metadata version mismatch: {{pkg_ver}} != {expected_ver}'
+import core
+source_path = str(Path(core.__file__).resolve()).lower()
+assert str(Path(sys.executable).parent.parent).lower() in source_path, f'Core imported from source instead of site-packages: {{source_path}}'
+print('OK_CLEAN_IMPORT')
+"""
+                        res_smoke = subprocess.run(
+                            [str(py_exe), "-c", smoke_code],
+                            cwd=str(temp_dir),
+                            capture_output=True,
+                            text=True,
+                        )
+                        if res_smoke.returncode != 0 or "OK_CLEAN_IMPORT" not in res_smoke.stdout:
+                            clean_install_violations.append(
+                                f"Clean environment import check failed: {res_smoke.stderr or res_smoke.stdout}"
+                            )
+
+                        # Check 2: CLI starts and reports version
+                        cli_exe = venv_dir / "Scripts" / "desktop-reviewer.exe" if os.name == "nt" else venv_dir / "bin" / "desktop-reviewer"
+                        if cli_exe.exists():
+                            res_cli = subprocess.run(
+                                [str(cli_exe), "version"],
+                                cwd=str(temp_dir),
+                                capture_output=True,
+                                text=True,
+                            )
+                            if res_cli.returncode != 0 or expected_ver not in res_cli.stdout:
+                                clean_install_violations.append(
+                                    f"Installed CLI version failed: {res_cli.stderr or res_cli.stdout}"
+                                )
+                        else:
+                            clean_install_violations.append(f"Installed CLI executable not found at {cli_exe}")
+
+                        # Check 3: Doctor runs cleanly in isolated environment
+                        doc_exe = venv_dir / "Scripts" / "desktop-webview-doctor.exe" if os.name == "nt" else venv_dir / "bin" / "desktop-webview-doctor"
+                        if doc_exe.exists():
+                            res_doc = subprocess.run(
+                                [str(doc_exe)],
+                                cwd=str(temp_dir),
+                                capture_output=True,
+                                text=True,
+                            )
+                            if res_doc.returncode != 0:
+                                clean_install_violations.append(
+                                    f"Installed Doctor check failed: {res_doc.stderr or res_doc.stdout}"
+                                )
+                        else:
+                            clean_install_violations.append(f"Installed Doctor executable not found at {doc_exe}")
+
+                        # Check 4: MCP executable resolves and self-test passes (7/7)
+                        mcp_exe = venv_dir / "Scripts" / "desktop-webview-mcp.exe" if os.name == "nt" else venv_dir / "bin" / "desktop-webview-mcp"
+                        if mcp_exe.exists():
+                            res_mcp = subprocess.run(
+                                [str(mcp_exe), "--self-test"],
+                                cwd=str(temp_dir),
+                                capture_output=True,
+                                text=True,
+                            )
+                            if res_mcp.returncode != 0 or "ALL CHECKS PASSED (7/7)" not in res_mcp.stdout:
+                                clean_install_violations.append(
+                                    f"Installed MCP self-test failed: {res_mcp.stderr or res_mcp.stdout}"
+                                )
+                        else:
+                            clean_install_violations.append(f"Installed MCP executable not found at {mcp_exe}")
+
+                except Exception as ex:
+                    clean_install_violations.append(f"Clean install verification exception: {ex}")
+        else:
+            clean_install_violations.append("No wheel available for clean installation verification.")
+
+        g8_dur = time.time() - g8_start
+        if not clean_install_violations:
+            stages.append(StageResult(
+                stage_name="8_CLEAN_INSTALL_VERIFICATION",
+                verdict="PASS",
+                details=f"Clean isolated installation verified: import, version ({expected_ver}), CLI, Doctor, MCP self-test (7/7).",
+                duration_sec=g8_dur,
+            ))
+            print(f"  -> PASS: Clean isolated environment verified ({expected_ver}).")
+        else:
+            overall_verdict = "FAIL"
+            stages.append(StageResult(
+                stage_name="8_CLEAN_INSTALL_VERIFICATION",
+                verdict="FAIL",
+                details=f"Clean isolated install verification failed ({len(clean_install_violations)} violations).",
+                duration_sec=g8_dur,
+                violations=clean_install_violations,
+            ))
+            print(f"  -> FAIL: Clean isolated install violations: {clean_install_violations}")
+
+        # ---------------------------------------------------------------------
+        # Gate 9: FINAL RELEASE GATE
+        # ---------------------------------------------------------------------
+        print("\n[Gate 9/9] Evaluating FINAL RELEASE GATE...")
+        g9_dur = time.time() - start_time
         summary = (
-            f"Release Candidate 2.0.0 validation: {overall_verdict}. "
-            f"Executed 8 pipeline stages across core tests, adversarial certification, "
-            f"security audit, and artifact verification."
+            f"Release Candidate {expected_ver} validation: {overall_verdict}. "
+            f"Executed 9 pipeline stages across core tests, adversarial certification, "
+            f"security audit, dynamic artifact verification, and isolated clean-environment validation."
         )
         stages.append(StageResult(
-            stage_name="8_FINAL_RELEASE_GATE",
+            stage_name="9_FINAL_RELEASE_GATE",
             verdict=overall_verdict,
             details=summary,
-            duration_sec=g8_dur,
+            duration_sec=g9_dur,
         ))
 
         report = ReleaseGateReport(
-            version=get_version_info().product_version,
+            version=expected_ver,
             overall_verdict=overall_verdict,
             stages=stages,
             artifacts=artifact_manifests,

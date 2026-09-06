@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from runtime.experience.learning.models import FieldIntelligenceReport
 
@@ -52,8 +52,8 @@ class FieldIntelligenceEngine:
 
     def _get_conn(self) -> sqlite3.Connection:
         if callable(self._conn_provider):
-            return self._conn_provider()
-        return self._conn_provider
+            return cast(sqlite3.Connection, self._conn_provider())
+        return cast(sqlite3.Connection, self._conn_provider)
 
     # 1. Top recurring failure signatures
     def query_top_recurring_failures(self, limit: int = 10) -> List[Dict[str, Any]]:
