@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "Universal desktop application webview testing, inspection, and verification capability."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 authors = [
     { name = "Google DeepMind Advanced Agentic Coding Team" }
 ]

@@ -5,7 +5,7 @@
 [![Status](https://img.shields.io/badge/status-production--released-green.svg)](docs/architecture/31_FINAL_2.0_CERTIFICATION_AND_RELEASE_REPORT.md)
 [![Architecture](https://img.shields.io/badge/architecture-Architecture%20H-purple.svg)](docs/architecture/11_FINAL_ARCHITECTURE_DECISION.md)
 [![MCP](https://img.shields.io/badge/mcp-control--plane-orange.svg)](docs/architecture/14_MCP_INTERFACE_SPEC.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-red.svg)](LICENSE)
 
 **Desktop WebView Reviewer** is a production-grade, agent-native automation and forensic-review system for hybrid Windows desktop applications hosting embedded web surfaces (QtWebEngine, Microsoft Edge WebView2, Electron, CEF/Chromium).
 
@@ -201,3 +201,13 @@ For complete documentation:
 
 **Status:** `2.0.0 PRODUCTION RELEASE CERTIFIED (VERDICT: PASS)`  
 (Limitations: UIA3 sidecar binary uncompiled by default; Windows WebKit lacks standard CDP input; DWM composition requires active display).
+
+---
+
+## License & Permitted Use
+
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**. See the [LICENSE](LICENSE) file for the full legal text.
+
+- **Personal & Non-Commercial Use (Allowed):** Anyone is welcome to use, run, test, and experiment with this project for personal workflows (including inside Google Antigravity, local personal workstations, educational, or research purposes).
+- **Commercial Monetization & Sale (Strictly Prohibited):** Selling, charging fees, sublicensing, or offering this software as part of a paid commercial product or SaaS is strictly forbidden.
+- **Anti-Plagiarism / Derivative Monetization (Strictly Prohibited):** No individual or company may copy, clone, white-label, or make minor modifications to this project in order to sell it, monetize it, or profit financially from it.

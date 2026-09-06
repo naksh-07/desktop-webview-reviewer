@@ -5,12 +5,17 @@ Packages cryptographic forensic bundle and evaluates tripartite verdict (Docs 14
 
 from __future__ import annotations
 import base64
+import dataclasses
 import logging
 import time
 import uuid
 from typing import Any, Dict, Optional
 
 from runtime.state import TargetPlane
+from runtime.target_manager import WindowIdentity
+from runtime.native_supervisor import NativeSupervisor
+from runtime.evidence_store import EvidenceStore
+from runtime.verification_engine import VerificationEngine
 from runtime.evidence_models import (
     VerificationVerdict,
     ProofLevel,
@@ -55,8 +60,15 @@ async def desktop_collect_evidence_impl(
         )
 
         evidence_id = f"ev_{int(time.time())}_{uuid.uuid4().hex[:6]}"
-        verifier = session.verification_engine
-        store = session.evidence_store
+        store: EvidenceStore = session.evidence_store or EvidenceStore()
+        session.evidence_store = store
+
+        verifier: VerificationEngine = session.verification_engine or VerificationEngine(
+            evidence_store=store,
+            default_proof_level=ProofLevel.LEVEL_3_DUAL_PERSPECTIVE_PROOF,
+            require_visible_gui=True,
+        )
+        session.verification_engine = verifier
 
         # Check for executed action outcome or generate baseline
         outcome = session.last_outcome
@@ -104,7 +116,8 @@ async def desktop_collect_evidence_impl(
 
         # Check physical window forensics
         target_hwnd = session.target_window.hwnd if session.target_window else None
-        supervisor = session.native_supervisor
+        supervisor: NativeSupervisor = session.native_supervisor or NativeSupervisor()
+        session.native_supervisor = supervisor
         if not target_hwnd or target_hwnd == 0:
             target_pid = session.target_process.pid if session.target_process else 0
             if target_pid:
@@ -131,21 +144,23 @@ async def desktop_collect_evidence_impl(
                         bounds=insp.bounds,
                         is_visible=insp.is_visible,
                         is_cloaked=insp.is_cloaked,
-                        is_minimized=insp.is_minimized,
+                        is_minimized=insp.is_iconic,
                         is_hung=insp.is_hung,
                     )
                 except Exception:
                     pass
 
         is_visible = supervisor.is_window_visible(target_hwnd) if target_hwnd else False
-        is_cloaked = supervisor.is_window_cloaked(target_hwnd) if target_hwnd else False
+        is_cloaked = session.target_window.is_cloaked if session.target_window else False
 
         target_pid = session.target_process.pid if session.target_process else 0
         post_snap = outcome.post_snapshot
-        if post_snap is None:
+        obs_engine = session.observation_engine
+        if post_snap is None and obs_engine is not None:
             try:
-                post_snap = await session.observation_engine.observe(hwnd=target_hwnd)
-                outcome.post_snapshot = post_snap
+                post_snap = await obs_engine.observe(hwnd=target_hwnd)
+                outcome = dataclasses.replace(outcome, post_snapshot=post_snap)
+                session.last_outcome = outcome
             except Exception as e:
                 logger.debug(f"Post-snapshot capture for evidence: {e}")
 
@@ -164,10 +179,10 @@ async def desktop_collect_evidence_impl(
 
         # Resolve pre-action snapshot
         pre_snap = None
-        if outcome and getattr(outcome, "pre_epoch", None) and session.observation_engine:
-            pre_snap = session.observation_engine._snapshots.get(outcome.pre_epoch)
-        if pre_snap is None and session.observation_engine:
-            pre_snap = session.observation_engine.last_snapshot
+        if outcome and getattr(outcome, "pre_epoch", None) and obs_engine is not None:
+            pre_snap = obs_engine._snapshots.get(outcome.pre_epoch)
+        if pre_snap is None and obs_engine is not None:
+            pre_snap = obs_engine.last_snapshot
 
         # Evaluate transaction via VerificationEngine
         verdict, manifest, items = verifier.evaluate_transaction(

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import logging
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, NoReturn
 
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -95,7 +95,7 @@ class McpControlPlaneException(Exception):
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
 
-    def raise_as_tool_error(self) -> None:
+    def raise_as_tool_error(self) -> NoReturn:
         """Raises official ToolError wrapping formatted machine-readable JSON."""
         raise ToolError(self.to_json())
 

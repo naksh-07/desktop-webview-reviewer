@@ -313,6 +313,11 @@ class WindowForensicReport:
     modals: Optional[NativeModalReport] = None
     is_enabled: bool = True
 
+    @property
+    def is_minimized(self) -> bool:
+        """Semantic alias for Win32 is_iconic state."""
+        return self.is_iconic
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "hwnd": hex(self.hwnd),
@@ -326,6 +331,7 @@ class WindowForensicReport:
             "is_valid_window": self.is_valid_window,
             "is_visible": self.is_visible,
             "is_iconic": self.is_iconic,
+            "is_minimized": self.is_iconic,
             "is_cloaked": self.is_cloaked,
             "is_hung": self.is_hung,
             "health_state": self.health_state.value,
