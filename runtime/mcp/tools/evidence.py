@@ -185,6 +185,27 @@ async def desktop_collect_evidence_impl(
             pre_snap = obs_engine.last_snapshot
 
         # Evaluate transaction via VerificationEngine
+        physical_desktop_evidence = None
+        thumbnail_b64 = TINY_PNG_BASE64
+        if target_hwnd and supervisor:
+            try:
+                success, ev, _ = supervisor.capture_authoritative_physical_desktop(
+                    target_hwnd=target_hwnd,
+                    expected_pid=window_pid or target_pid,
+                    session_id=session_id,
+                    action_epoch=session.current_epoch
+                )
+                if success and ev:
+                    physical_desktop_evidence = ev
+                    if ev.artifact_path:
+                        try:
+                            with open(ev.artifact_path, "rb") as f:
+                                thumbnail_b64 = base64.b64encode(f.read()).decode('utf-8')
+                        except Exception as e:
+                            logger.error(f"Failed to load screenshot for thumbnail: {e}")
+            except Exception as e:
+                logger.debug(f"Physical desktop capture failed: {e}")
+
         verdict, manifest, items = verifier.evaluate_transaction(
             session_id=session_id,
             action_request=request,
@@ -194,6 +215,7 @@ async def desktop_collect_evidence_impl(
             post_snapshot=post_snap,
             target_process_info=proc_info,
             execution_mode="automated",
+            physical_desktop_evidence=physical_desktop_evidence,
         )
 
         # Seal cryptographic manifest to disk in EvidenceStore
@@ -209,17 +231,19 @@ async def desktop_collect_evidence_impl(
             "fatal_console_errors": 0,
         }
 
-        resource_uri = f"desktop://evidence/{manifest.evidence_id}"
+        # Handle either manifest_id or evidence_id
+        ev_id = getattr(manifest, "evidence_id", getattr(manifest, "manifest_id", "unknown"))
+        resource_uri = f"desktop://evidence/{ev_id}"
 
         return {
             "verdict": verdict_str,
             "verdict_rationale": verdict_rationale,
-            "evidence_id": manifest.evidence_id,
+            "evidence_id": ev_id,
             "resource_uri": resource_uri,
             "evidence_resource_uri": resource_uri,
             "proof_metrics": proof_metrics,
-            "thumbnail_base64": TINY_PNG_BASE64,
-            "thumbnail_preview_b64": TINY_PNG_BASE64,
+            "thumbnail_base64": thumbnail_b64,
+            "thumbnail_preview_b64": thumbnail_b64,
         }
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)

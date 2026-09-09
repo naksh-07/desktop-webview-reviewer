@@ -174,6 +174,19 @@ class TestVerificationEngine(unittest.TestCase):
 
     def test_verified_transaction_produces_pass(self):
         """Proves that a completely satisfied transaction loop evaluates to PASS."""
+        shot_nat = ScreenshotEvidence(
+            screenshot_id="s_nat",
+            screenshot_type="NATIVE_WINDOW",
+            coordinate_space="WINDOW_EXTENDED_FRAME",
+            dimensions=(1024, 768),
+            capture_bounds=(100, 100, 1024, 768),
+            sha256="d00be442b4159c037f2baca86ad60528cb5b9a9b94b7c4118810ae93a644f252",
+            relative_path="s_nat.png",
+            timestamp=time.time(),
+            capture_method="REAL_DESKTOP_SURFACE",
+            is_certifying=True,
+        )
+
         verdict, manifest, ev_items = self.verifier.evaluate_transaction(
             session_id=self.session_id,
             action_request=self.request,
@@ -184,6 +197,7 @@ class TestVerificationEngine(unittest.TestCase):
             observation_diff=self.diff_mutated,
             target_process_info={"pid": 1234, "is_running": True},
             execution_mode="automated",
+            native_screenshot=shot_nat,
         )
 
         self.assertEqual(verdict, VerificationVerdict.PASS)
@@ -191,6 +205,11 @@ class TestVerificationEngine(unittest.TestCase):
         self.assertIsNone(manifest.unverified_reason)
         self.assertTrue(manifest.manifest_hash)
         self.assertGreater(len(ev_items), 0)
+
+        # Create dummy file to satisfy integrity check
+        action_dir = self.store.base_dir / f"session-{self.session_id}" / f"action-{self.request.action_id}"
+        action_dir.mkdir(parents=True, exist_ok=True)
+        (action_dir / "s_nat.png").write_bytes(b"dummy image data")
 
         # Check that evidence store stored manifest and it passes integrity check
         is_valid, violations = self.store.verify_manifest_integrity(manifest)
@@ -412,8 +431,12 @@ class TestVerificationEngine(unittest.TestCase):
             screenshot_type="NATIVE_WINDOW",
             coordinate_space="WINDOW_EXTENDED_FRAME",
             dimensions=(1024, 768),
-            sha256="a" * 64,
+            capture_bounds=(100, 100, 1024, 768),
+            sha256="d00be442b4159c037f2baca86ad60528cb5b9a9b94b7c4118810ae93a644f252",
             relative_path="screenshots/native.png",
+            timestamp=time.time(),
+            capture_method="REAL_DESKTOP_SURFACE",
+            is_certifying=True,
         )
         shot_web = ScreenshotEvidence(
             screenshot_id="s_web",
@@ -439,6 +462,19 @@ class TestVerificationEngine(unittest.TestCase):
 
     def test_interactive_mode_requires_user_confirmation(self):
         """Proves that interactive mode holds verdict at UNVERIFIED until user confirmation is supplied."""
+        shot_nat = ScreenshotEvidence(
+            screenshot_id="s_nat",
+            screenshot_type="NATIVE_WINDOW",
+            coordinate_space="WINDOW_EXTENDED_FRAME",
+            dimensions=(1024, 768),
+            capture_bounds=(100, 100, 1024, 768),
+            sha256="d00be442b4159c037f2baca86ad60528cb5b9a9b94b7c4118810ae93a644f252",
+            relative_path="s_nat.png",
+            timestamp=time.time(),
+            capture_method="REAL_DESKTOP_SURFACE",
+            is_certifying=True,
+        )
+
         # Interactive mode without confirmation -> UNVERIFIED
         verdict, manifest, _ = self.verifier.evaluate_transaction(
             session_id=self.session_id,
@@ -448,8 +484,10 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.post_snapshot,
             observation_diff=self.diff_mutated,
+            target_process_info={"pid": 1234, "is_running": True},
             execution_mode="interactive",
             user_confirmed=False,
+            native_screenshot=shot_nat,
         )
         self.assertEqual(verdict, VerificationVerdict.UNVERIFIED)
         self.assertEqual(manifest.unverified_reason, UnverifiedReason.USER_CONFIRMATION_PENDING)
@@ -463,8 +501,10 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.post_snapshot,
             observation_diff=self.diff_mutated,
+            target_process_info={"pid": 1234, "is_running": True},
             execution_mode="interactive",
             user_confirmed=True,
+            native_screenshot=shot_nat,
         )
         self.assertEqual(verdict_ok, VerificationVerdict.PASS)
 
@@ -533,6 +573,19 @@ class TestVerificationEngine(unittest.TestCase):
             duration_ms=45.0,
         )
         
+        shot_nat = ScreenshotEvidence(
+            screenshot_id="s_nat",
+            screenshot_type="NATIVE_WINDOW",
+            coordinate_space="WINDOW_EXTENDED_FRAME",
+            dimensions=(1024, 768),
+            capture_bounds=(100, 100, 1024, 768),
+            sha256="d00be442b4159c037f2baca86ad60528cb5b9a9b94b7c4118810ae93a644f252",
+            relative_path="s_nat.png",
+            timestamp=time.time(),
+            capture_method="REAL_DESKTOP_SURFACE",
+            is_certifying=True,
+        )
+
         verdict, manifest, _ = self.verifier.evaluate_transaction(
             session_id=self.session_id,
             action_request=self.request,
@@ -541,6 +594,9 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.pre_snapshot, # same epoch to prevent has_epoch_advance
             observation_diff=diff_with_mutations,
+            target_process_info={"pid": 1234, "is_running": True},
+            execution_mode="automated",
+            native_screenshot=shot_nat,
         )
         
         self.assertEqual(verdict, VerificationVerdict.PASS)

@@ -229,11 +229,24 @@ class EvidenceCollector:
                     )
 
         # 3. Check Screenshot Provenance
-        if screenshots:
-            for sname, smeta in screenshots.items():
-                if smeta.screenshot_type == ScreenshotType.CDP_PAGE_CAPTURE:
-                    # CDP captures are valid for webview inspection, but cannot substitute for missing GUI
-                    pass
+        if require_visible_gui:
+            has_real_desktop = False
+            if screenshots:
+                for sname, smeta in screenshots.items():
+                    # Reject CDP-only as desktop GUI proofs
+                    if getattr(smeta, "source", "").startswith("cdp"):
+                        continue
+                    if "win32_gdi_hwnd" in getattr(smeta, "source", ""):
+                        # For legacy paths using PrintWindow, foreground must be matched
+                        has_real_desktop = True
+                    elif "real_desktop_surface" in getattr(smeta, "source", ""):
+                        has_real_desktop = True
+                        
+            if not has_real_desktop:
+                return (
+                    Verdict.UNVERIFIED,
+                    "No authoritative real desktop capture found. CDP-only or unverified captures are insufficient."
+                )
 
         # 4. All forensic checks and assertions succeeded
         return (

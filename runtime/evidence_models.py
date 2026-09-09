@@ -73,6 +73,58 @@ class ClaimType(str, Enum):
     WindowClosed = "WindowClosed"
 
 
+class CaptureMethod(str, Enum):
+    REAL_DESKTOP_SURFACE = "REAL_DESKTOP_SURFACE"
+    PRINT_WINDOW_DIAGNOSTIC = "PRINT_WINDOW_DIAGNOSTIC"
+    WINDOW_DC_DIAGNOSTIC = "WINDOW_DC_DIAGNOSTIC"
+    CDP_VIEWPORT_DIAGNOSTIC = "CDP_VIEWPORT_DIAGNOSTIC"
+    CDP_PAGE_DIAGNOSTIC = "CDP_PAGE_DIAGNOSTIC"
+
+
+@dataclass(frozen=True)
+class PhysicalDesktopEvidence:
+    evidence_id: str
+    session_id: str
+    target_hwnd: int
+    target_pid: int
+    foreground_hwnd: int
+    is_exact_foreground: bool
+    dimensions: Tuple[int, int]
+    capture_timestamp: float
+    pixel_sha256: str
+    artifact_path: str
+    action_epoch: int = 0
+    process_creation_time: float = 0.0
+    occlusion_state: str = "NOT_OCCLUDED"
+    occlusion_ratio: float = 0.0
+    physical_bounds: Tuple[int, int, int, int] = (0, 0, 0, 0)
+    capture_method: str = "REAL_DESKTOP_SURFACE"
+    is_authoritative: bool = True
+    post_capture_validated: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "evidence_id": self.evidence_id,
+            "session_id": self.session_id,
+            "action_epoch": self.action_epoch,
+            "target_hwnd": self.target_hwnd,
+            "target_pid": self.target_pid,
+            "process_creation_time": self.process_creation_time,
+            "foreground_hwnd": self.foreground_hwnd,
+            "is_exact_foreground": self.is_exact_foreground,
+            "occlusion_state": self.occlusion_state,
+            "occlusion_ratio": self.occlusion_ratio,
+            "physical_bounds": list(self.physical_bounds),
+            "dimensions": list(self.dimensions),
+            "capture_timestamp": self.capture_timestamp,
+            "capture_method": self.capture_method,
+            "pixel_sha256": self.pixel_sha256,
+            "artifact_path": self.artifact_path,
+            "is_authoritative": self.is_authoritative,
+            "post_capture_validated": self.post_capture_validated,
+        }
+
+
 class UnverifiedReason(str, Enum):
     """Explicit structural reasons explaining why an action or claim remains UNVERIFIED."""
     PHYSICAL_STATE_UNKNOWN = "PHYSICAL_STATE_UNKNOWN"
@@ -92,6 +144,14 @@ class UnverifiedReason(str, Enum):
     PID_MISMATCH = "PID_MISMATCH"
     INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
     TIMED_OUT = "TIMED_OUT"
+    FOREGROUND_MISMATCH = "FOREGROUND_MISMATCH"
+    WINDOW_OCCLUDED = "WINDOW_OCCLUDED"
+    PROCESS_IDENTITY_MISMATCH = "PROCESS_IDENTITY_MISMATCH"
+    EVIDENCE_STALE = "EVIDENCE_STALE"
+    NON_AUTHORITATIVE_CAPTURE = "NON_AUTHORITATIVE_CAPTURE"
+    BOUNDS_MISMATCH = "BOUNDS_MISMATCH"
+    CAPTURE_FAILED = "CAPTURE_FAILED"
+
 
 
 @dataclass(frozen=True)
@@ -265,6 +325,13 @@ class ScreenshotEvidence:
     relative_path: str = ""
     is_thumbnail: bool = False
     timestamp: float = field(default_factory=time.time)
+    capture_method: str = "REAL_DESKTOP_SURFACE"
+    is_certifying: bool = False
+    session_id: Optional[str] = None
+    epoch_id: Optional[int] = None
+    process_creation_time: float = 0.0
+    foreground_hwnd: Optional[int] = None
+    occlusion_state: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -280,6 +347,13 @@ class ScreenshotEvidence:
             "relative_path": self.relative_path,
             "is_thumbnail": self.is_thumbnail,
             "timestamp": self.timestamp,
+            "capture_method": self.capture_method,
+            "is_certifying": self.is_certifying,
+            "session_id": self.session_id,
+            "epoch_id": self.epoch_id,
+            "process_creation_time": self.process_creation_time,
+            "foreground_hwnd": hex(self.foreground_hwnd) if self.foreground_hwnd else None,
+            "occlusion_state": self.occlusion_state,
         }
 
 

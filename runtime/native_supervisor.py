@@ -376,7 +376,7 @@ class NativeOSSupervisor:
         try:
             pid_var = wintypes.DWORD()
             w32.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid_var))
-            return pid_var.value
+            return int(pid_var.value)
         except Exception:
             return 0
 
@@ -1007,6 +1007,119 @@ class NativeOSSupervisor:
                 w32.gdi32.DeleteDC(hdc_mem)
             if hdc_window:
                 w32.user32.ReleaseDC(hwnd, hdc_window)
+
+    @classmethod
+    def capture_authoritative_physical_desktop(
+        cls,
+        target_hwnd: int,
+        expected_pid: Optional[int] = None,
+        expected_creation_time: Optional[float] = None,
+        session_id: str = "",
+        action_epoch: int = 0,
+        output_path: Optional[str] = None,
+        max_staleness: float = 5.0,
+    ) -> Tuple[bool, Optional[Any], str]:
+        """
+        Captures the physical desktop securely and returns PhysicalDesktopEvidence.
+        """
+        if sys.platform != "win32" or w32.user32 is None:
+            return False, None, "Unsupported platform"
+
+        from runtime.evidence_models import PhysicalDesktopEvidence, CaptureMethod
+
+        # Pre-capture state validation
+        if not w32.user32.IsWindow(target_hwnd):
+            return False, None, "Target HWND is not a valid window"
+
+        pid = cls.get_window_pid(target_hwnd)
+        if expected_pid is not None and pid != expected_pid:
+            return False, None, "PID mismatch"
+
+        if not w32.user32.IsWindowVisible(target_hwnd):
+            return False, None, "Target window is not visible"
+
+        if w32.user32.IsIconic(target_hwnd):
+            return False, None, "Target window is minimized"
+
+        cloaked = False
+        if w32.dwmapi is not None:
+            cloaked_val = wintypes.DWORD(0)
+            res = w32.dwmapi.DwmGetWindowAttribute(
+                target_hwnd, w32.DWMWA_CLOAKED, ctypes.byref(cloaked_val), ctypes.sizeof(cloaked_val)
+            )
+            if res == 0 and cloaked_val.value != 0:
+                cloaked = True
+        if cloaked:
+            return False, None, "Target window is cloaked"
+
+        fg_hwnd = w32.user32.GetForegroundWindow()
+        if fg_hwnd != target_hwnd:
+            return False, None, "Target window is not exact foreground"
+
+        bounds, _, _ = cls.get_canonical_window_bounds(target_hwnd)
+        if bounds.width < 10 or bounds.height < 10:
+            return False, None, "Target window bounds are too small"
+
+        occlusion = cls.inspect_occlusion(target_hwnd)
+        if occlusion.state != OcclusionState.NOT_OCCLUDED or occlusion.occlusion_ratio > 0.0:
+            return False, None, "Target window is occluded"
+
+        bounds_before = bounds
+
+        # Physical Screen DC BitBlt Capture
+        success, png_bytes, sha256_hash, meta = cls.capture_desktop_crop(bounds_before, output_path=output_path)
+        if not success:
+            return False, None, "Physical desktop capture failed"
+
+        # Immediate post-capture validation
+        if not w32.user32.IsWindow(target_hwnd):
+            return False, None, "Target window state shifted during capture"
+        if not w32.user32.IsWindowVisible(target_hwnd):
+            return False, None, "Target window state shifted during capture"
+        if w32.user32.IsIconic(target_hwnd):
+            return False, None, "Target window state shifted during capture"
+
+        cloaked_after = False
+        if w32.dwmapi is not None:
+            cloaked_val = wintypes.DWORD(0)
+            res = w32.dwmapi.DwmGetWindowAttribute(
+                target_hwnd, w32.DWMWA_CLOAKED, ctypes.byref(cloaked_val), ctypes.sizeof(cloaked_val)
+            )
+            if res == 0 and cloaked_val.value != 0:
+                cloaked_after = True
+        if cloaked_after:
+            return False, None, "Target window state shifted during capture"
+
+        fg_hwnd_after = w32.user32.GetForegroundWindow()
+        if fg_hwnd_after != target_hwnd:
+            return False, None, "Target window state shifted during capture"
+
+        bounds_after, _, _ = cls.get_canonical_window_bounds(target_hwnd)
+        if bounds_after != bounds_before:
+            return False, None, "Target window state shifted during capture"
+
+        evidence = PhysicalDesktopEvidence(
+            evidence_id=f"phys_{time.time()}",
+            session_id=session_id,
+            target_hwnd=target_hwnd,
+            target_pid=pid,
+            foreground_hwnd=fg_hwnd,
+            is_exact_foreground=True,
+            dimensions=(bounds_before.width, bounds_before.height),
+            capture_timestamp=time.time(),
+            pixel_sha256=sha256_hash,
+            artifact_path=output_path or "",
+            action_epoch=action_epoch,
+            process_creation_time=expected_creation_time or 0.0,
+            occlusion_state=occlusion.state.value,
+            occlusion_ratio=occlusion.occlusion_ratio,
+            physical_bounds=(bounds_before.x, bounds_before.y, bounds_before.width, bounds_before.height),
+            capture_method=CaptureMethod.REAL_DESKTOP_SURFACE.value,
+            is_authoritative=True,
+            post_capture_validated=True,
+        )
+
+        return True, evidence, ""
 
     @classmethod
     def capture_desktop_crop(
