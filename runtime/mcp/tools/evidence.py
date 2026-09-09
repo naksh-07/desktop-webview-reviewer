@@ -170,11 +170,31 @@ async def desktop_collect_evidence_impl(
             else target_pid
         )
         proc_tree = list({target_pid, window_pid}) if target_pid or window_pid else [0]
+
+        # Check Agent-Controlled Runtime Session liveness
+        if session.is_agent_controlled:
+            if not session.agent_control_session.verify_liveness():
+                logger.warning(f"Agent control liveness check failed for session {session_id}")
+
+        proc_creation_time = 0.0
+        if session.agent_control_session and isinstance(getattr(session.agent_control_session, "process_creation_time", None), (int, float)) and session.agent_control_session.process_creation_time > 0.0:
+            proc_creation_time = float(session.agent_control_session.process_creation_time)
+        elif session.target_process and isinstance(getattr(session.target_process, "creation_time", None), (int, float)) and session.target_process.creation_time > 0.0:
+            proc_creation_time = float(session.target_process.creation_time)
+        else:
+            try:
+                import psutil
+                if window_pid or target_pid:
+                    proc_creation_time = float(psutil.Process(window_pid or target_pid).create_time())
+            except Exception:
+                pass
+
         proc_info = {
             "pid": window_pid or target_pid,
             "is_running": True,
             "crashed": False,
             "process_tree": proc_tree,
+            "create_time": proc_creation_time,
         }
 
         # Resolve pre-action snapshot
@@ -193,7 +213,9 @@ async def desktop_collect_evidence_impl(
                     target_hwnd=target_hwnd,
                     expected_pid=window_pid or target_pid,
                     session_id=session_id,
-                    action_epoch=session.current_epoch
+                    action_epoch=session.current_epoch,
+                    action_id=request.action_id,
+                    expected_creation_time=proc_creation_time,
                 )
                 if success and ev:
                     physical_desktop_evidence = ev
@@ -244,6 +266,8 @@ async def desktop_collect_evidence_impl(
             "proof_metrics": proof_metrics,
             "thumbnail_base64": thumbnail_b64,
             "thumbnail_preview_b64": thumbnail_b64,
+            "agent_controlled": session.is_agent_controlled,
+            "agent_control_status": session.agent_control_session.to_dict() if session.agent_control_session else None,
         }
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)

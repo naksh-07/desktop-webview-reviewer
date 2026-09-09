@@ -184,6 +184,15 @@ async def desktop_launch_impl(
         await bridge.daemon.session_manager.connect_session(session.session_id)
         await bridge.daemon.session_manager.activate_session(session.session_id, plane=active_plane)
 
+        # 4.2 Activate Agent-Controlled Runtime Session & Status Indicator
+        proc_creation_time = session.target_process.creation_time if session.target_process else 0.0
+        session.start_agent_control(
+            target_hwnd=primary_hwnd or 0,
+            target_pid=pid,
+            process_creation_time=proc_creation_time,
+            indicator_text="Agent is controlling this application",
+        )
+
         # 5. Capture initial snapshot
         initial_snapshot = ""
         try:
@@ -205,6 +214,8 @@ async def desktop_launch_impl(
             "initial_snapshot": initial_snapshot,
             "observation_epoch": session.current_epoch,
             "lifecycle_state": session.lifecycle_state.value,
+            "agent_controlled": True,
+            "agent_control_status": session.agent_control_session.to_dict() if session.agent_control_session else None,
         }
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)
@@ -311,6 +322,15 @@ async def desktop_attach_impl(
         await bridge.daemon.session_manager.connect_session(session.session_id)
         await bridge.daemon.session_manager.activate_session(session.session_id, plane=active_plane)
 
+        # Activate Agent-Controlled Runtime Session & Status Indicator
+        proc_creation_time = session.target_process.creation_time if session.target_process else 0.0
+        session.start_agent_control(
+            target_hwnd=target_hwnd or 0,
+            target_pid=resolved_pid,
+            process_creation_time=proc_creation_time,
+            indicator_text="Agent is controlling this application",
+        )
+
         # Capture initial snapshot
         initial_snapshot = ""
         try:
@@ -331,6 +351,8 @@ async def desktop_attach_impl(
             "initial_snapshot": initial_snapshot,
             "observation_epoch": session.current_epoch,
             "lifecycle_state": session.lifecycle_state.value,
+            "agent_controlled": True,
+            "agent_control_status": session.agent_control_session.to_dict() if session.agent_control_session else None,
         }
     except Exception as e:
         mcp_err = map_exception_to_mcp_error(e)

@@ -92,6 +92,7 @@ class SessionState:
     diagnostic_aggregator: Optional[Any] = None
     specialist_dispatcher: Optional[Any] = None
     experience_adapter: Optional[Any] = None
+    agent_control_session: Optional[Any] = None
 
     def __post_init__(self):
         self.reference_registry = ReferenceRegistry(session_id=self.session_id)
@@ -126,6 +127,44 @@ class SessionState:
         return self.lifecycle_state in (SessionLifecycleState.CLOSED, SessionLifecycleState.TERMINATED)
 
     @property
+    def is_agent_controlled(self) -> bool:
+        return bool(self.agent_control_session and self.agent_control_session.is_active)
+
+    def start_agent_control(
+        self,
+        target_hwnd: int,
+        target_pid: int,
+        process_creation_time: float = 0.0,
+        indicator_text: str = "Agent is controlling this application",
+    ) -> Any:
+        from runtime.agent_control import AgentControlledRuntimeSession
+        self.agent_control_session = AgentControlledRuntimeSession(
+            session_id=self.session_id,
+            target_hwnd=target_hwnd,
+            target_pid=target_pid,
+            process_creation_time=process_creation_time,
+            current_epoch=self.current_epoch,
+        )
+        self.agent_control_session.indicator.indicator_text = indicator_text
+        self.agent_control_session.start_control()
+        return self.agent_control_session
+
+    def pause_agent_control(self, reason: str = "paused") -> bool:
+        if self.agent_control_session:
+            return self.agent_control_session.pause_control(reason)
+        return False
+
+    def resume_agent_control(self) -> bool:
+        if self.agent_control_session:
+            return self.agent_control_session.resume_control()
+        return False
+
+    def terminate_agent_control(self, reason: str = "terminated") -> bool:
+        if self.agent_control_session:
+            return self.agent_control_session.terminate_control(reason)
+        return False
+
+    @property
     def current_epoch(self) -> int:
         return self.reference_registry.current_epoch
 
@@ -158,6 +197,8 @@ class SessionState:
             "target_endpoint": self.target_endpoint.to_dict() if self.target_endpoint else None,
             "capabilities": self.capabilities.to_dict(),
             "diagnostic_state": self.diagnostic_state,
+            "agent_controlled": self.is_agent_controlled,
+            "agent_control_session": self.agent_control_session.to_dict() if self.agent_control_session else None,
         }
 
 
@@ -325,6 +366,9 @@ class SessionManager:
                     await session.webview_core.disconnect()
                 except Exception as e:
                     logger.warning(f"Error disconnecting webview_core for session {session_id}: {e}")
+
+            if session.agent_control_session:
+                session.terminate_agent_control(f"session_closed_{reason}")
 
             session.transition_lifecycle(SessionLifecycleState.CLOSED)
             session.connection_state = ConnectionState.DISCONNECTED

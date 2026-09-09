@@ -667,6 +667,17 @@ class ActionExecutionEngine:
             )
 
             physical_desktop_evidence = None
+            tree_pids = [target_pid] if target_pid else []
+            proc_create_time = 0.0
+            try:
+                import psutil
+                if target_pid:
+                    p = psutil.Process(target_pid)
+                    tree_pids.extend([c.pid for c in p.children(recursive=True)])
+                    proc_create_time = p.create_time()
+            except Exception:
+                pass
+
             if target and target.native_hwnd and self.native_supervisor:
                 try:
                     success, ev, _ = self.native_supervisor.capture_authoritative_physical_desktop(
@@ -674,6 +685,8 @@ class ActionExecutionEngine:
                         expected_pid=target.native_pid,
                         session_id=self.session_id,
                         action_epoch=post_epoch,
+                        action_id=request.action_id,
+                        expected_creation_time=proc_create_time,
                     )
                     if success and ev:
                         physical_desktop_evidence = ev
@@ -682,15 +695,7 @@ class ActionExecutionEngine:
 
             if verify and self.verification_engine:
                 try:
-                    tree_pids = [target_pid] if target_pid else []
-                    try:
-                        import psutil
-                        if target_pid:
-                            p = psutil.Process(target_pid)
-                            tree_pids.extend([c.pid for c in p.children(recursive=True)])
-                    except Exception:
-                        pass
-                    proc_info = {"pid": target_pid, "process_tree": tree_pids, "is_running": True} if target_pid else None
+                    proc_info = {"pid": target_pid, "process_tree": tree_pids, "is_running": True, "create_time": proc_create_time} if target_pid else None
                     v, m, _ = self.verification_engine.evaluate_transaction(
                         session_id=self.session_id,
                         action_request=request,

@@ -233,19 +233,20 @@ class EvidenceCollector:
             has_real_desktop = False
             if screenshots:
                 for sname, smeta in screenshots.items():
-                    # Reject CDP-only as desktop GUI proofs
-                    if getattr(smeta, "source", "").startswith("cdp"):
+                    # Reject CDP-only, PrintWindow, and window DC as desktop GUI proofs
+                    source = getattr(smeta, "source", "").lower()
+                    if source.startswith("cdp") or "viewport" in source:
                         continue
-                    if "win32_gdi_hwnd" in getattr(smeta, "source", ""):
-                        # For legacy paths using PrintWindow, foreground must be matched
-                        has_real_desktop = True
-                    elif "real_desktop_surface" in getattr(smeta, "source", ""):
+                    if "win32_gdi_hwnd" in source or "print_window" in source or "window_dc" in source:
+                        # PrintWindow / Window DC is diagnostic only; cannot certify real desktop visibility
+                        continue
+                    elif "real_desktop_surface" in source or "desktop_capture" in source or (smeta.screenshot_type == ScreenshotType.NATIVE_DESKTOP and "hwnd" not in source):
                         has_real_desktop = True
                         
             if not has_real_desktop:
                 return (
                     Verdict.UNVERIFIED,
-                    "No authoritative real desktop capture found. CDP-only or unverified captures are insufficient."
+                    "No authoritative real desktop capture found. CDP-only, PrintWindow, or unverified captures are insufficient."
                 )
 
         # 4. All forensic checks and assertions succeeded

@@ -20,6 +20,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Set
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 from runtime.references import Rect
 from runtime.state import HealthState
 from runtime.errors import (
@@ -1016,11 +1021,13 @@ class NativeOSSupervisor:
         expected_creation_time: Optional[float] = None,
         session_id: str = "",
         action_epoch: int = 0,
+        action_id: Optional[str] = None,
         output_path: Optional[str] = None,
         max_staleness: float = 5.0,
     ) -> Tuple[bool, Optional[Any], str]:
         """
         Captures the physical desktop securely and returns PhysicalDesktopEvidence.
+        Independently validates process creation time from OS to guard against PID recycling.
         """
         if sys.platform != "win32" or w32.user32 is None:
             return False, None, "Unsupported platform"
@@ -1034,6 +1041,19 @@ class NativeOSSupervisor:
         pid = cls.get_window_pid(target_hwnd)
         if expected_pid is not None and pid != expected_pid:
             return False, None, "PID mismatch"
+
+        # Independently resolve process creation time from the operating system
+        actual_create_time = 0.0
+        if psutil is not None and pid > 0:
+            try:
+                proc = psutil.Process(pid)
+                actual_create_time = float(proc.create_time())
+            except Exception:
+                pass
+
+        if expected_creation_time is not None and expected_creation_time > 0.0:
+            if abs(actual_create_time - expected_creation_time) > 0.05:
+                return False, None, "Process creation time mismatch"
 
         if not w32.user32.IsWindowVisible(target_hwnd):
             return False, None, "Target window is not visible"
@@ -1073,11 +1093,11 @@ class NativeOSSupervisor:
 
         # Immediate post-capture validation
         if not w32.user32.IsWindow(target_hwnd):
-            return False, None, "Target window state shifted during capture"
+            return False, None, "Target window state shifted during capture: destroyed"
         if not w32.user32.IsWindowVisible(target_hwnd):
-            return False, None, "Target window state shifted during capture"
+            return False, None, "Target window state shifted during capture: visibility lost"
         if w32.user32.IsIconic(target_hwnd):
-            return False, None, "Target window state shifted during capture"
+            return False, None, "Target window state shifted during capture: became minimized"
 
         cloaked_after = False
         if w32.dwmapi is not None:
@@ -1088,15 +1108,33 @@ class NativeOSSupervisor:
             if res == 0 and cloaked_val.value != 0:
                 cloaked_after = True
         if cloaked_after:
-            return False, None, "Target window state shifted during capture"
+            return False, None, "Target window state shifted during capture: became cloaked"
 
         fg_hwnd_after = w32.user32.GetForegroundWindow()
         if fg_hwnd_after != target_hwnd:
-            return False, None, "Target window state shifted during capture"
+            return False, None, "Target window state shifted during capture: lost foreground"
 
         bounds_after, _, _ = cls.get_canonical_window_bounds(target_hwnd)
         if bounds_after != bounds_before:
-            return False, None, "Target window state shifted during capture"
+            return False, None, "Target window state shifted during capture: bounds changed"
+
+        pid_after = cls.get_window_pid(target_hwnd)
+        if pid_after != pid:
+            return False, None, "Target window state shifted during capture: PID changed"
+
+        create_time_after = 0.0
+        if psutil is not None and pid_after > 0:
+            try:
+                proc_after = psutil.Process(pid_after)
+                create_time_after = float(proc_after.create_time())
+            except Exception:
+                pass
+        if actual_create_time > 0.0 and abs(create_time_after - actual_create_time) > 0.05:
+            return False, None, "Target window state shifted during capture: process creation time changed (PID recycled)"
+
+        occlusion_after = cls.inspect_occlusion(target_hwnd)
+        if occlusion_after.state != OcclusionState.NOT_OCCLUDED or occlusion_after.occlusion_ratio > 0.0:
+            return False, None, "Target window state shifted during capture: became occluded"
 
         evidence = PhysicalDesktopEvidence(
             evidence_id=f"phys_{time.time()}",
@@ -1110,7 +1148,8 @@ class NativeOSSupervisor:
             pixel_sha256=sha256_hash,
             artifact_path=output_path or "",
             action_epoch=action_epoch,
-            process_creation_time=expected_creation_time or 0.0,
+            action_id=action_id,
+            process_creation_time=actual_create_time,
             occlusion_state=occlusion.state.value,
             occlusion_ratio=occlusion.occlusion_ratio,
             physical_bounds=(bounds_before.x, bounds_before.y, bounds_before.width, bounds_before.height),

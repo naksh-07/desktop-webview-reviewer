@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -555,6 +556,251 @@ class VerificationEngine:
                 reason=f"Action dispatch failed: {receipt.error}",
             )
 
+    def _validate_authoritative_physical_desktop_evidence(
+        self,
+        evidence: Any,
+        session_id: str,
+        action_id: str,
+        epoch: int,
+        native_obs: Optional[NativeObservation],
+        proc_info: Optional[Dict[str, Any]],
+    ) -> Tuple[bool, Optional[UnverifiedReason], str]:
+        """
+        Single canonical verification boundary for physical desktop evidence.
+        Treats incoming evidence as completely untrusted input and independently validates:
+        - Provenance (REAL_DESKTOP_SURFACE only, non-certifying/diagnostic captures rejected)
+        - Explicit authoritativeness & post-capture atomic continuity validation
+        - Session binding (evidence.session_id == current session_id)
+        - Action & Epoch binding (evidence.action_id == action_id, evidence.action_epoch == epoch)
+        - Exact HWND correlation (evidence.target_hwnd == native_obs.hwnd)
+        - Exact foreground state (evidence.foreground_hwnd == target_hwnd, is_exact_foreground=True)
+        - Process correlation (evidence.target_pid == native_obs.pid and matches process tree)
+        - Process creation time (PID-reuse defense: independently verified against OS process identity)
+        - Occlusion & Z-order (evidence.occlusion_ratio == 0.0, evidence.occlusion_state == NOT_OCCLUDED)
+        - Physical bounds integrity (evidence bounds match canonical window bounds)
+        - Dimension consistency (pixel dimensions match physical rectangle)
+        - Pixel SHA-256 hash validity (non-empty, 64-character hex)
+        - Artifact file integrity (if artifact path exists, file exists, is non-empty, and SHA-256 matches)
+        - Freshness window (max 5.0 seconds staleness, no future timestamps)
+        """
+        if not evidence:
+            return False, UnverifiedReason.SCREENSHOT_UNAVAILABLE, "Physical desktop evidence is missing"
+
+        # 1. Provenance & Authority
+        capture_method = getattr(evidence, "capture_method", None)
+        if capture_method != "REAL_DESKTOP_SURFACE":
+            return (
+                False,
+                UnverifiedReason.NON_AUTHORITATIVE_CAPTURE,
+                f"Capture method '{capture_method}' is not authoritative REAL_DESKTOP_SURFACE",
+            )
+        if not getattr(evidence, "is_authoritative", True):
+            return False, UnverifiedReason.NON_AUTHORITATIVE_CAPTURE, "Physical desktop evidence is marked non-authoritative"
+        if not getattr(evidence, "post_capture_validated", True):
+            return (
+                False,
+                UnverifiedReason.POST_CAPTURE_VALIDATION_FAILED,
+                "Physical desktop evidence post-capture validation failed",
+            )
+        if isinstance(evidence, ScreenshotEvidence) and not getattr(evidence, "is_certifying", False):
+            return False, UnverifiedReason.NON_AUTHORITATIVE_CAPTURE, "ScreenshotEvidence is not certifying"
+
+        # 2. Session Binding
+        ev_session = getattr(evidence, "session_id", None)
+        if ev_session is not None and ev_session != session_id:
+            return (
+                False,
+                UnverifiedReason.SESSION_MISMATCH,
+                f"Evidence session ID '{ev_session}' does not match current session '{session_id}'",
+            )
+
+        # 3. Action Epoch & Action ID Binding
+        ev_epoch = getattr(evidence, "action_epoch", getattr(evidence, "epoch_id", None))
+        if ev_epoch is not None and ev_epoch != epoch:
+            return (
+                False,
+                UnverifiedReason.EPOCH_MISMATCH,
+                f"Evidence action epoch ({ev_epoch}) does not match current epoch ({epoch})",
+            )
+        ev_action = getattr(evidence, "action_id", None)
+        if ev_action is not None and action_id and ev_action != action_id:
+            return (
+                False,
+                UnverifiedReason.ACTION_MISMATCH,
+                f"Evidence action ID ('{ev_action}') does not match current action ('{action_id}')",
+            )
+
+        # 4. Native Observation & HWND Binding
+        if not native_obs or not native_obs.hwnd:
+            return False, UnverifiedReason.PHYSICAL_STATE_UNKNOWN, "No native OS window forensics available"
+        ev_hwnd = getattr(evidence, "target_hwnd", None)
+        if ev_hwnd is not None and ev_hwnd != native_obs.hwnd:
+            return (
+                False,
+                UnverifiedReason.HWND_MISMATCH,
+                f"Evidence target HWND ({hex(ev_hwnd) if ev_hwnd else 'None'}) does not match observed HWND ({hex(native_obs.hwnd)})",
+            )
+
+        # 5. Exact Foreground Enforcement
+        ev_fg_hwnd = getattr(evidence, "foreground_hwnd", None)
+        if ev_fg_hwnd is not None and ev_hwnd is not None and ev_fg_hwnd != ev_hwnd:
+            return (
+                False,
+                UnverifiedReason.FOREGROUND_MISMATCH,
+                f"Evidence foreground HWND ({hex(ev_fg_hwnd)}) does not match target HWND ({hex(ev_hwnd)})",
+            )
+        if not getattr(evidence, "is_exact_foreground", True):
+            return (
+                False,
+                UnverifiedReason.FOREGROUND_MISMATCH,
+                "Target window was not the exact foreground window during capture",
+            )
+        if getattr(native_obs, "is_foreground", None) is False:
+            return (
+                False,
+                UnverifiedReason.FOREGROUND_MISMATCH,
+                "Native observation reports target window is not foreground",
+            )
+
+        # 6. PID & Process Tree Correlation
+        ev_pid = getattr(evidence, "target_pid", None)
+        if ev_pid is not None and ev_pid != native_obs.pid:
+            return (
+                False,
+                UnverifiedReason.PID_MISMATCH,
+                f"Evidence target PID ({ev_pid}) does not match observed window PID ({native_obs.pid})",
+            )
+        if proc_info and proc_info.get("pid"):
+            expected_pid = proc_info["pid"]
+            tree_pids = set(proc_info.get("process_tree", [expected_pid]))
+            if ev_pid is not None and ev_pid not in tree_pids:
+                return (
+                    False,
+                    UnverifiedReason.PID_MISMATCH,
+                    f"Evidence PID ({ev_pid}) does not belong to expected process tree ({tree_pids})",
+                )
+
+        # 7. Process Creation Time (PID-reuse defense)
+        ev_create_time = getattr(evidence, "process_creation_time", 0.0)
+        if proc_info and proc_info.get("create_time"):
+            exp_create_time = float(proc_info["create_time"])
+            if exp_create_time > 0.0:
+                if ev_create_time <= 0.0:
+                    return (
+                        False,
+                        UnverifiedReason.PROCESS_IDENTITY_MISMATCH,
+                        "Evidence missing independently observed process creation time",
+                    )
+                if abs(ev_create_time - exp_create_time) > 0.05:
+                    return (
+                        False,
+                        UnverifiedReason.PROCESS_IDENTITY_MISMATCH,
+                        f"Process creation time mismatch: evidence={ev_create_time}, expected={exp_create_time} (PID recycling detected)",
+                    )
+
+        # 8. Occlusion & Z-Order
+        occ_ratio = getattr(evidence, "occlusion_ratio", 0.0)
+        if occ_ratio > 0.0:
+            return (
+                False,
+                UnverifiedReason.WINDOW_OCCLUDED,
+                f"Target window is occluded during physical capture (ratio: {occ_ratio:.2f})",
+            )
+        occ_state = getattr(evidence, "occlusion_state", None) or "NOT_OCCLUDED"
+        if occ_state != "NOT_OCCLUDED":
+            return (
+                False,
+                UnverifiedReason.WINDOW_OCCLUDED,
+                f"Target window occlusion state is '{occ_state}'",
+            )
+        if getattr(native_obs, "occlusion_ratio", 0.0) > 0.0:
+            return (
+                False,
+                UnverifiedReason.WINDOW_OCCLUDED,
+                f"Native observation occlusion ratio is {native_obs.occlusion_ratio:.2f}",
+            )
+
+        # 9. Physical Bounds & Dimensions Consistency
+        phys_bounds = getattr(evidence, "physical_bounds", getattr(evidence, "capture_bounds", (0, 0, 0, 0)))
+        if len(phys_bounds) == 4 and (phys_bounds[2] <= 0 or phys_bounds[3] <= 0):
+            return (
+                False,
+                UnverifiedReason.WINDOW_NON_RENDERABLE,
+                "Evidence physical bounds have non-renderable or zero geometry",
+            )
+        if len(phys_bounds) == 4:
+            if phys_bounds[2] != native_obs.bounds.width or phys_bounds[3] != native_obs.bounds.height:
+                return (
+                    False,
+                    UnverifiedReason.BOUNDS_MISMATCH,
+                    f"Physical bounds in evidence ({phys_bounds[2]}x{phys_bounds[3]}) don't match window bounds ({native_obs.bounds.width}x{native_obs.bounds.height})",
+                )
+        dims = getattr(evidence, "dimensions", None)
+        if dims is not None and len(dims) == 2 and len(phys_bounds) == 4:
+            if dims[0] != phys_bounds[2] or dims[1] != phys_bounds[3]:
+                return (
+                    False,
+                    UnverifiedReason.DIMENSIONS_MISMATCH,
+                    f"Evidence pixel dimensions ({dims[0]}x{dims[1]}) do not match capture bounds ({phys_bounds[2]}x{phys_bounds[3]})",
+                )
+
+        # 10. Pixel SHA-256 Hash Integrity
+        pixel_hash = getattr(evidence, "pixel_sha256", getattr(evidence, "sha256", ""))
+        if not pixel_hash or len(pixel_hash) != 64 or not all(c in "0123456789abcdefABCDEF" for c in pixel_hash):
+            return (
+                False,
+                UnverifiedReason.NON_AUTHORITATIVE_CAPTURE,
+                "Missing or malformed pixel SHA-256 hash in evidence",
+            )
+
+        # 11. Artifact File Integrity
+        artifact_path = getattr(evidence, "artifact_path", "")
+        if artifact_path:
+            resolved = artifact_path
+            if not os.path.isabs(resolved) and hasattr(self, "evidence_store") and self.evidence_store:
+                resolved = os.path.join(self.evidence_store.base_dir, f"session-{session_id}", artifact_path)
+            if os.path.isabs(resolved) or (hasattr(self, "evidence_store") and self.evidence_store):
+                if not os.path.exists(resolved):
+                    return (
+                        False,
+                        UnverifiedReason.ARTIFACT_MISSING,
+                        f"Physical desktop artifact file not found: {artifact_path}",
+                    )
+            try:
+                with open(resolved, "rb") as f:
+                    raw_bytes = f.read()
+                if len(raw_bytes) == 0:
+                    return (
+                        False,
+                        UnverifiedReason.ARTIFACT_MISSING,
+                        "Physical desktop artifact file is empty (0 bytes)",
+                    )
+                actual_sha = hashlib.sha256(raw_bytes).hexdigest()
+                if actual_sha.lower() != pixel_hash.lower():
+                    return (
+                        False,
+                        UnverifiedReason.ARTIFACT_HASH_MISMATCH,
+                        f"Artifact SHA-256 mismatch: disk={actual_sha}, evidence={pixel_hash}",
+                    )
+            except Exception as ex:
+                return (
+                    False,
+                    UnverifiedReason.ARTIFACT_MISSING,
+                    f"Could not read physical desktop artifact file: {ex}",
+                )
+
+        # 12. Freshness Window (Max 5.0 seconds)
+        capture_time = getattr(evidence, "capture_timestamp", getattr(evidence, "timestamp", 0.0))
+        now = time.time()
+        if capture_time <= 0.0 or (now - capture_time) > 5.0 or (capture_time - now) > 2.0:
+            return (
+                False,
+                UnverifiedReason.EVIDENCE_STALE,
+                f"Physical desktop capture is stale (age: {now - capture_time:.2f}s)",
+            )
+
+        return True, None, "Physical desktop capture independently verified"
+
     def _evaluate_claim_physical_visibility(
         self,
         session_id: str,
@@ -568,6 +814,7 @@ class VerificationEngine:
     ) -> VerificationClaim:
         ev_refs = [e.evidence_id for e in evidence if e.evidence_type in (EvidenceType.NATIVE_WINDOW_STATE, EvidenceType.PROCESS_IDENTITY)]
 
+        # Policy Gate: visible GUI requirement
         if not self.require_visible_gui:
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
@@ -584,6 +831,7 @@ class VerificationEngine:
                 unverified_reason=UnverifiedReason.PHYSICAL_STATE_UNKNOWN,
             )
 
+        # Native Observation Presence
         if not native_obs:
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
@@ -682,8 +930,8 @@ class VerificationEngine:
                 reason=f"Application window has non-renderable or zero geometry ({width}x{height}).",
                 unverified_reason=UnverifiedReason.WINDOW_NON_RENDERABLE,
             )
-            
-        if getattr(native_obs, "is_foreground", None) is False or (physical_desktop_evidence and not getattr(physical_desktop_evidence, "is_exact_foreground", True)):
+
+        if getattr(native_obs, "is_foreground", None) is False:
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
                 session_id=session_id,
@@ -695,10 +943,10 @@ class VerificationEngine:
                 status=VerificationVerdict.UNVERIFIED,
                 confidence=0.0,
                 evidence_refs=tuple(ev_refs),
-                reason=f"Application window is not the exact foreground window.",
+                reason="Application window is not the exact foreground window.",
                 unverified_reason=UnverifiedReason.FOREGROUND_MISMATCH,
             )
-            
+
         if hasattr(native_obs, "occlusion_ratio") and native_obs.occlusion_ratio > 0.0:
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
@@ -711,7 +959,7 @@ class VerificationEngine:
                 status=VerificationVerdict.UNVERIFIED,
                 confidence=0.0,
                 evidence_refs=tuple(ev_refs),
-                reason=f"Application window is occluded.",
+                reason=f"Application window is occluded (ratio: {native_obs.occlusion_ratio:.2f}).",
                 unverified_reason=UnverifiedReason.WINDOW_OCCLUDED,
             )
 
@@ -734,41 +982,21 @@ class VerificationEngine:
                     reason=f"Window owning PID ({native_obs.pid}) does not match expected application process tree.",
                     unverified_reason=UnverifiedReason.PID_MISMATCH,
                 )
-                
-            expected_creation = proc_info.get("create_time", 0.0)
-            if physical_desktop_evidence and expected_creation and physical_desktop_evidence.process_creation_time and physical_desktop_evidence.process_creation_time != expected_creation:
-                return VerificationClaim(
-                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
-                    session_id=session_id,
-                    action_id=action_id,
-                    observation_epoch=epoch,
-                    claim_type=ClaimType.TargetWasPhysicallyVisible,
-                    expected=f"Creation time {expected_creation}",
-                    actual=physical_desktop_evidence.process_creation_time,
-                    status=VerificationVerdict.UNVERIFIED,
-                    confidence=0.0,
-                    evidence_refs=tuple(ev_refs),
-                    reason=f"Process creation time mismatch.",
-                    unverified_reason=UnverifiedReason.PROCESS_IDENTITY_MISMATCH,
-                )
 
-        if not physical_desktop_evidence and not native_screenshot:
-            return VerificationClaim(
-                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
-                session_id=session_id,
-                action_id=action_id,
-                observation_epoch=epoch,
-                claim_type=ClaimType.TargetWasPhysicallyVisible,
-                expected="Physical Desktop Evidence",
-                actual="None",
-                status=VerificationVerdict.UNVERIFIED,
-                confidence=0.0,
-                evidence_refs=tuple(ev_refs),
-                reason="Physical desktop screenshot missing.",
-                unverified_reason=UnverifiedReason.SCREENSHOT_UNAVAILABLE,
-            )
+        # Select candidate physical evidence
+        candidate_evidence = physical_desktop_evidence if physical_desktop_evidence is not None else native_screenshot
 
-        if not physical_desktop_evidence and not (native_screenshot and getattr(native_screenshot, "is_certifying", False) and getattr(native_screenshot, "capture_method", "") == "REAL_DESKTOP_SURFACE"):
+        # Validate through Canonical Physical Evidence Boundary
+        is_valid, uv_reason, reason_desc = self._validate_authoritative_physical_desktop_evidence(
+            evidence=candidate_evidence,
+            session_id=session_id,
+            action_id=action_id,
+            epoch=epoch,
+            native_obs=native_obs,
+            proc_info=proc_info,
+        )
+
+        if not is_valid:
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
                 session_id=session_id,
@@ -776,46 +1004,12 @@ class VerificationEngine:
                 observation_epoch=epoch,
                 claim_type=ClaimType.TargetWasPhysicallyVisible,
                 expected="Authoritative Physical Desktop Evidence",
-                actual="Non-authoritative",
+                actual=f"Rejected: {uv_reason.value if uv_reason else 'UNVERIFIED'}",
                 status=VerificationVerdict.UNVERIFIED,
                 confidence=0.0,
                 evidence_refs=tuple(ev_refs),
-                reason="Authoritative physical desktop capture missing or not REAL_DESKTOP_SURFACE.",
-                unverified_reason=UnverifiedReason.NON_AUTHORITATIVE_CAPTURE,
-            )
-            
-        capture_time = physical_desktop_evidence.capture_timestamp if physical_desktop_evidence else native_screenshot.timestamp
-        if abs(time.time() - capture_time) > 5.0:
-            return VerificationClaim(
-                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
-                session_id=session_id,
-                action_id=action_id,
-                observation_epoch=epoch,
-                claim_type=ClaimType.TargetWasPhysicallyVisible,
-                expected="Fresh evidence",
-                actual="Stale evidence",
-                status=VerificationVerdict.UNVERIFIED,
-                confidence=0.0,
-                evidence_refs=tuple(ev_refs),
-                reason="Physical desktop capture is stale.",
-                unverified_reason=UnverifiedReason.EVIDENCE_STALE,
-            )
-            
-        phys_bounds = physical_desktop_evidence.physical_bounds if physical_desktop_evidence else native_screenshot.capture_bounds
-        if phys_bounds[2] != native_obs.bounds.width or phys_bounds[3] != native_obs.bounds.height:
-            return VerificationClaim(
-                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
-                session_id=session_id,
-                action_id=action_id,
-                observation_epoch=epoch,
-                claim_type=ClaimType.TargetWasPhysicallyVisible,
-                expected="Bounds match",
-                actual="Bounds mismatch",
-                status=VerificationVerdict.UNVERIFIED,
-                confidence=0.0,
-                evidence_refs=tuple(ev_refs),
-                reason="Physical bounds in evidence don't match window canonical bounds.",
-                unverified_reason=UnverifiedReason.BOUNDS_MISMATCH,
+                reason=reason_desc,
+                unverified_reason=uv_reason or UnverifiedReason.NON_AUTHORITATIVE_CAPTURE,
             )
 
         return VerificationClaim(
@@ -829,7 +1023,7 @@ class VerificationEngine:
             status=VerificationVerdict.PASS,
             confidence=1.0,
             evidence_refs=tuple(ev_refs),
-            reason=f"Physical window HWND {hex(native_obs.hwnd)} confirmed visible, non-minimized, and uncloaked on desktop.",
+            reason=f"Physical window HWND {hex(native_obs.hwnd)} confirmed visible, non-minimized, uncloaked, unoccluded, and captured from real desktop surface.",
         )
 
     def _evaluate_claim_input_reached_target(

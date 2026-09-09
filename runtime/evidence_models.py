@@ -74,11 +74,13 @@ class ClaimType(str, Enum):
 
 
 class CaptureMethod(str, Enum):
+    UNKNOWN = "UNKNOWN"
     REAL_DESKTOP_SURFACE = "REAL_DESKTOP_SURFACE"
     PRINT_WINDOW_DIAGNOSTIC = "PRINT_WINDOW_DIAGNOSTIC"
     WINDOW_DC_DIAGNOSTIC = "WINDOW_DC_DIAGNOSTIC"
     CDP_VIEWPORT_DIAGNOSTIC = "CDP_VIEWPORT_DIAGNOSTIC"
     CDP_PAGE_DIAGNOSTIC = "CDP_PAGE_DIAGNOSTIC"
+    WEBVIEW_DIAGNOSTIC = "WEBVIEW_DIAGNOSTIC"
 
 
 @dataclass(frozen=True)
@@ -94,6 +96,7 @@ class PhysicalDesktopEvidence:
     pixel_sha256: str
     artifact_path: str
     action_epoch: int = 0
+    action_id: Optional[str] = None
     process_creation_time: float = 0.0
     occlusion_state: str = "NOT_OCCLUDED"
     occlusion_ratio: float = 0.0
@@ -107,6 +110,7 @@ class PhysicalDesktopEvidence:
             "evidence_id": self.evidence_id,
             "session_id": self.session_id,
             "action_epoch": self.action_epoch,
+            "action_id": self.action_id,
             "target_hwnd": self.target_hwnd,
             "target_pid": self.target_pid,
             "process_creation_time": self.process_creation_time,
@@ -150,7 +154,17 @@ class UnverifiedReason(str, Enum):
     EVIDENCE_STALE = "EVIDENCE_STALE"
     NON_AUTHORITATIVE_CAPTURE = "NON_AUTHORITATIVE_CAPTURE"
     BOUNDS_MISMATCH = "BOUNDS_MISMATCH"
+    DIMENSIONS_MISMATCH = "DIMENSIONS_MISMATCH"
     CAPTURE_FAILED = "CAPTURE_FAILED"
+    SESSION_MISMATCH = "SESSION_MISMATCH"
+    EPOCH_MISMATCH = "EPOCH_MISMATCH"
+    ACTION_MISMATCH = "ACTION_MISMATCH"
+    HWND_MISMATCH = "HWND_MISMATCH"
+    ARTIFACT_MISSING = "ARTIFACT_MISSING"
+    ARTIFACT_HASH_MISMATCH = "ARTIFACT_HASH_MISMATCH"
+    POST_CAPTURE_VALIDATION_FAILED = "POST_CAPTURE_VALIDATION_FAILED"
+    PID_RECYCLED = "PID_RECYCLED"
+    FORGED_EVIDENCE = "FORGED_EVIDENCE"
 
 
 
@@ -325,10 +339,11 @@ class ScreenshotEvidence:
     relative_path: str = ""
     is_thumbnail: bool = False
     timestamp: float = field(default_factory=time.time)
-    capture_method: str = "REAL_DESKTOP_SURFACE"
+    capture_method: str = "UNKNOWN"
     is_certifying: bool = False
     session_id: Optional[str] = None
     epoch_id: Optional[int] = None
+    action_id: Optional[str] = None
     process_creation_time: float = 0.0
     foreground_hwnd: Optional[int] = None
     occlusion_state: Optional[str] = None
@@ -351,6 +366,7 @@ class ScreenshotEvidence:
             "is_certifying": self.is_certifying,
             "session_id": self.session_id,
             "epoch_id": self.epoch_id,
+            "action_id": self.action_id,
             "process_creation_time": self.process_creation_time,
             "foreground_hwnd": hex(self.foreground_hwnd) if self.foreground_hwnd else None,
             "occlusion_state": self.occlusion_state,
