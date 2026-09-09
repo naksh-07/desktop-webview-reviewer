@@ -80,6 +80,7 @@ class VerificationEngine:
         execution_mode: str = "automated", # "automated" | "interactive"
         user_confirmed: bool = False,
         required_proof_level: Optional[ProofLevel] = None,
+        physical_desktop_evidence: Optional[Any] = None,
     ) -> Tuple[VerificationVerdict, EvidenceManifest, List[EvidenceItem]]:
         """
         Main entry point for transaction verification:
@@ -310,7 +311,8 @@ class VerificationEngine:
 
         # Claim 2: TargetWasPhysicallyVisible
         claim_vis = self._evaluate_claim_physical_visibility(
-            session_id, action_id, current_epoch, native_obs, target_process_info, evidence_items
+            session_id, action_id, current_epoch, native_obs, target_process_info, evidence_items,
+            native_screenshot=native_screenshot, physical_desktop_evidence=physical_desktop_evidence
         )
         claims.append(claim_vis)
 
@@ -561,6 +563,8 @@ class VerificationEngine:
         native_obs: Optional[NativeObservation],
         proc_info: Optional[Dict[str, Any]],
         evidence: List[EvidenceItem],
+        native_screenshot: Optional[ScreenshotEvidence] = None,
+        physical_desktop_evidence: Optional[Any] = None,
     ) -> VerificationClaim:
         ev_refs = [e.evidence_id for e in evidence if e.evidence_type in (EvidenceType.NATIVE_WINDOW_STATE, EvidenceType.PROCESS_IDENTITY)]
 
@@ -572,11 +576,12 @@ class VerificationEngine:
                 observation_epoch=epoch,
                 claim_type=ClaimType.TargetWasPhysicallyVisible,
                 expected=True,
-                actual=True,
-                status=VerificationVerdict.PASS,
+                actual=False,
+                status=VerificationVerdict.UNVERIFIED,
                 confidence=0.8,
                 evidence_refs=tuple(ev_refs),
-                reason="Physical GUI visibility requirement waived by policy.",
+                reason="Physical GUI visibility requirement waived by policy, but cannot certify physical reality.",
+                unverified_reason=UnverifiedReason.PHYSICAL_STATE_UNKNOWN,
             )
 
         if not native_obs:
@@ -662,14 +667,14 @@ class VerificationEngine:
 
         width = native_obs.bounds.width
         height = native_obs.bounds.height
-        if width < 30 or height < 30:
+        if width <= 0 or height <= 0:
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
                 session_id=session_id,
                 action_id=action_id,
                 observation_epoch=epoch,
                 claim_type=ClaimType.TargetWasPhysicallyVisible,
-                expected="renderable geometry (>=30x30)",
+                expected="renderable geometry (>0x0)",
                 actual=f"{width}x{height}",
                 status=VerificationVerdict.UNVERIFIED,
                 confidence=0.0,
@@ -677,28 +682,141 @@ class VerificationEngine:
                 reason=f"Application window has non-renderable or zero geometry ({width}x{height}).",
                 unverified_reason=UnverifiedReason.WINDOW_NON_RENDERABLE,
             )
+            
+        if getattr(native_obs, "is_foreground", None) is False or (physical_desktop_evidence and not getattr(physical_desktop_evidence, "is_exact_foreground", True)):
+            return VerificationClaim(
+                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                session_id=session_id,
+                action_id=action_id,
+                observation_epoch=epoch,
+                claim_type=ClaimType.TargetWasPhysicallyVisible,
+                expected="Exact foreground",
+                actual="Not foreground",
+                status=VerificationVerdict.UNVERIFIED,
+                confidence=0.0,
+                evidence_refs=tuple(ev_refs),
+                reason=f"Application window is not the exact foreground window.",
+                unverified_reason=UnverifiedReason.FOREGROUND_MISMATCH,
+            )
+            
+        if hasattr(native_obs, "occlusion_ratio") and native_obs.occlusion_ratio > 0.0:
+            return VerificationClaim(
+                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                session_id=session_id,
+                action_id=action_id,
+                observation_epoch=epoch,
+                claim_type=ClaimType.TargetWasPhysicallyVisible,
+                expected="NOT_OCCLUDED",
+                actual="OCCLUDED",
+                status=VerificationVerdict.UNVERIFIED,
+                confidence=0.0,
+                evidence_refs=tuple(ev_refs),
+                reason=f"Application window is occluded.",
+                unverified_reason=UnverifiedReason.WINDOW_OCCLUDED,
+            )
 
         # PID verification
         if proc_info and proc_info.get("pid"):
             expected_pid = proc_info["pid"]
-            if native_obs.pid and native_obs.pid != expected_pid:
-                # PID tree check
-                tree_pids = set(proc_info.get("process_tree", [expected_pid]))
-                if native_obs.pid not in tree_pids:
-                    return VerificationClaim(
-                        claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
-                        session_id=session_id,
-                        action_id=action_id,
-                        observation_epoch=epoch,
-                        claim_type=ClaimType.TargetWasPhysicallyVisible,
-                        expected=f"PID in {tree_pids}",
-                        actual=native_obs.pid,
-                        status=VerificationVerdict.UNVERIFIED,
-                        confidence=0.0,
-                        evidence_refs=tuple(ev_refs),
-                        reason=f"Window owning PID ({native_obs.pid}) does not match expected application process tree.",
-                        unverified_reason=UnverifiedReason.PID_MISMATCH,
-                    )
+            tree_pids = set(proc_info.get("process_tree", [expected_pid]))
+            if native_obs.pid and native_obs.pid not in tree_pids:
+                return VerificationClaim(
+                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                    session_id=session_id,
+                    action_id=action_id,
+                    observation_epoch=epoch,
+                    claim_type=ClaimType.TargetWasPhysicallyVisible,
+                    expected=f"PID in {tree_pids}",
+                    actual=native_obs.pid,
+                    status=VerificationVerdict.UNVERIFIED,
+                    confidence=0.0,
+                    evidence_refs=tuple(ev_refs),
+                    reason=f"Window owning PID ({native_obs.pid}) does not match expected application process tree.",
+                    unverified_reason=UnverifiedReason.PID_MISMATCH,
+                )
+                
+            expected_creation = proc_info.get("create_time", 0.0)
+            if physical_desktop_evidence and expected_creation and physical_desktop_evidence.process_creation_time and physical_desktop_evidence.process_creation_time != expected_creation:
+                return VerificationClaim(
+                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                    session_id=session_id,
+                    action_id=action_id,
+                    observation_epoch=epoch,
+                    claim_type=ClaimType.TargetWasPhysicallyVisible,
+                    expected=f"Creation time {expected_creation}",
+                    actual=physical_desktop_evidence.process_creation_time,
+                    status=VerificationVerdict.UNVERIFIED,
+                    confidence=0.0,
+                    evidence_refs=tuple(ev_refs),
+                    reason=f"Process creation time mismatch.",
+                    unverified_reason=UnverifiedReason.PROCESS_IDENTITY_MISMATCH,
+                )
+
+        if not physical_desktop_evidence and not native_screenshot:
+            return VerificationClaim(
+                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                session_id=session_id,
+                action_id=action_id,
+                observation_epoch=epoch,
+                claim_type=ClaimType.TargetWasPhysicallyVisible,
+                expected="Physical Desktop Evidence",
+                actual="None",
+                status=VerificationVerdict.UNVERIFIED,
+                confidence=0.0,
+                evidence_refs=tuple(ev_refs),
+                reason="Physical desktop screenshot missing.",
+                unverified_reason=UnverifiedReason.SCREENSHOT_UNAVAILABLE,
+            )
+
+        if not physical_desktop_evidence and not (native_screenshot and getattr(native_screenshot, "is_certifying", False) and getattr(native_screenshot, "capture_method", "") == "REAL_DESKTOP_SURFACE"):
+            return VerificationClaim(
+                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                session_id=session_id,
+                action_id=action_id,
+                observation_epoch=epoch,
+                claim_type=ClaimType.TargetWasPhysicallyVisible,
+                expected="Authoritative Physical Desktop Evidence",
+                actual="Non-authoritative",
+                status=VerificationVerdict.UNVERIFIED,
+                confidence=0.0,
+                evidence_refs=tuple(ev_refs),
+                reason="Authoritative physical desktop capture missing or not REAL_DESKTOP_SURFACE.",
+                unverified_reason=UnverifiedReason.NON_AUTHORITATIVE_CAPTURE,
+            )
+            
+        capture_time = physical_desktop_evidence.capture_timestamp if physical_desktop_evidence else native_screenshot.timestamp
+        if abs(time.time() - capture_time) > 5.0:
+            return VerificationClaim(
+                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                session_id=session_id,
+                action_id=action_id,
+                observation_epoch=epoch,
+                claim_type=ClaimType.TargetWasPhysicallyVisible,
+                expected="Fresh evidence",
+                actual="Stale evidence",
+                status=VerificationVerdict.UNVERIFIED,
+                confidence=0.0,
+                evidence_refs=tuple(ev_refs),
+                reason="Physical desktop capture is stale.",
+                unverified_reason=UnverifiedReason.EVIDENCE_STALE,
+            )
+            
+        phys_bounds = physical_desktop_evidence.physical_bounds if physical_desktop_evidence else native_screenshot.capture_bounds
+        if phys_bounds[2] != native_obs.bounds.width or phys_bounds[3] != native_obs.bounds.height:
+            return VerificationClaim(
+                claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                session_id=session_id,
+                action_id=action_id,
+                observation_epoch=epoch,
+                claim_type=ClaimType.TargetWasPhysicallyVisible,
+                expected="Bounds match",
+                actual="Bounds mismatch",
+                status=VerificationVerdict.UNVERIFIED,
+                confidence=0.0,
+                evidence_refs=tuple(ev_refs),
+                reason="Physical bounds in evidence don't match window canonical bounds.",
+                unverified_reason=UnverifiedReason.BOUNDS_MISMATCH,
+            )
 
         return VerificationClaim(
             claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
@@ -1138,12 +1256,29 @@ class VerificationEngine:
         # 3. Check for UNVERIFIED claims
         unverified_claims = [c for c in claims if c.status == VerificationVerdict.UNVERIFIED]
         if unverified_claims:
-            first_uv = unverified_claims[0]
+            # Prioritize certain unverified reasons
+            priority_order = {
+                UnverifiedReason.USER_CONFIRMATION_PENDING: 1,
+                UnverifiedReason.POST_STATE_MISSING: 2,
+                UnverifiedReason.SCREENSHOT_UNAVAILABLE: 3,
+                UnverifiedReason.PHYSICAL_STATE_UNKNOWN: 4,
+                UnverifiedReason.NON_AUTHORITATIVE_CAPTURE: 5,
+            }
+            
+            best_uv = unverified_claims[0]
+            best_score = priority_order.get(best_uv.unverified_reason, 99) if best_uv.unverified_reason else 99
+            
+            for c in unverified_claims[1:]:
+                score = priority_order.get(c.unverified_reason, 99) if c.unverified_reason else 99
+                if score < best_score:
+                    best_score = score
+                    best_uv = c
+                    
             reasons = [f"{c.claim_type.value}: {c.reason}" for c in unverified_claims]
             return (
                 VerificationVerdict.UNVERIFIED,
                 f"Incomplete proof: {'; '.join(reasons)}",
-                first_uv.unverified_reason or UnverifiedReason.INSUFFICIENT_EVIDENCE,
+                best_uv.unverified_reason or UnverifiedReason.INSUFFICIENT_EVIDENCE,
             )
 
         # 4. Check Proof Level requirements

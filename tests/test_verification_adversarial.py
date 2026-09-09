@@ -287,8 +287,12 @@ class TestVerificationAdversarialAndTamper(unittest.TestCase):
             screenshot_type="NATIVE_WINDOW",
             coordinate_space="WINDOW_EXTENDED_FRAME",
             dimensions=(1024, 768),
+            capture_bounds=(100, 100, 1024, 768),
             sha256="a" * 64,
             relative_path="screenshots/native.png",
+            timestamp=time.time(),
+            capture_method="REAL_DESKTOP_SURFACE",
+            is_certifying=True,
         )
 
         verdict, manifest, _ = self.verifier.evaluate_transaction(

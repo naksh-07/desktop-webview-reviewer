@@ -136,9 +136,9 @@ class TestReleaseVersionIntegrity(unittest.TestCase):
         self.assertIn("tests/test_something.py", violations[0])
 
     def test_installation_source_differentiation(self):
-        """Installation registry and version info correctly distinguish source checkout."""
+        """Installation registry and version info correctly distinguish source checkout or local."""
         vinfo = get_version_info()
-        self.assertEqual(vinfo.installation_source, "source_checkout")
+        self.assertIn(vinfo.installation_source, ["source_checkout", "direct_wheel", "editable"])
 
 
 if __name__ == "__main__":

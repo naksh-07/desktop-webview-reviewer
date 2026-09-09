@@ -666,6 +666,20 @@ class ActionExecutionEngine:
                 },
             )
 
+            physical_desktop_evidence = None
+            if target and target.native_hwnd and self.native_supervisor:
+                try:
+                    success, ev, _ = self.native_supervisor.capture_authoritative_physical_desktop(
+                        target_hwnd=target.native_hwnd,
+                        expected_pid=target.native_pid,
+                        session_id=self.session_id,
+                        action_epoch=post_epoch,
+                    )
+                    if success and ev:
+                        physical_desktop_evidence = ev
+                except Exception as e:
+                    logger.debug(f"Physical desktop capture skipped or failed: {e}")
+
             if verify and self.verification_engine:
                 try:
                     tree_pids = [target_pid] if target_pid else []
@@ -688,6 +702,7 @@ class ActionExecutionEngine:
                         target_process_info=proc_info,
                         execution_mode=execution_mode,
                         user_confirmed=user_confirmed,
+                        physical_desktop_evidence=physical_desktop_evidence,
                     )
                     outcome = ActionOutcome(
                         action_id=outcome.action_id,
