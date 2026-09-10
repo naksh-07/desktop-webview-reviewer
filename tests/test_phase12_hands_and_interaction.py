@@ -42,7 +42,8 @@ from runtime.evidence_store import EvidenceStore
 
 class TestPhase12HandsAndInteraction(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.session_id = "test_hands_session"
+        import uuid
+        self.session_id = f"test_hands_{uuid.uuid4().hex[:8]}"
         self.ref_registry = ReferenceRegistry(session_id=self.session_id)
         self.trace_engine = DesktopTraceEngine(session_id=self.session_id)
 

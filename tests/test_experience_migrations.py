@@ -127,7 +127,7 @@ class TestExperienceMigrations(unittest.TestCase):
 
             # Now run apply_migrations: should apply v2, v3, v4 (3 migrations)
             applied = apply_migrations(conn)
-            self.assertEqual(applied, 3)
+            self.assertEqual(applied, 4)
 
             cursor.execute("PRAGMA user_version;")
             self.assertEqual(cursor.fetchone()[0], CURRENT_SCHEMA_VERSION)

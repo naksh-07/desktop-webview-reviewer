@@ -96,7 +96,6 @@ class ProcessIncarnation:
             "pid": self.pid,
             "process_creation_time": self.process_creation_time,
             "session_id": self.session_id,
-            "attempt_id": self.attempt_id,
             }
 
 @dataclass(frozen=True)
@@ -203,7 +202,6 @@ class EvidenceItem:
             "session_id": self.session_id,
             "attempt_id": self.attempt_id,
             "action_id": self.action_id,
-            "attempt_id": self.attempt_id,
             "epoch": self.epoch,
             "source_plane": self.source_plane.value if isinstance(self.source_plane, TargetPlane) else str(self.source_plane),
             "source_component": self.source_component,
@@ -249,12 +247,6 @@ class VerificationClaim:
     status: VerificationVerdict
     confidence: float
     attempt_id: str = ""
-    claim_type: ClaimType
-    expected: Any
-    actual: Any
-    status: VerificationVerdict
-    confidence: float
-    attempt_id: str = ""
     evidence_refs: Tuple[str, ...] = field(default_factory=tuple)
     reason: str = ""
     unverified_reason: Optional[UnverifiedReason] = None
@@ -266,7 +258,6 @@ class VerificationClaim:
             "session_id": self.session_id,
             "attempt_id": self.attempt_id,
             "action_id": self.action_id,
-            "attempt_id": self.attempt_id,
             "observation_epoch": self.observation_epoch,
             "claim_type": self.claim_type.value if isinstance(self.claim_type, ClaimType) else str(self.claim_type),
             "expected": self.expected,
@@ -403,7 +394,6 @@ class EvidenceManifest:
     session_id: str
     action_id: str
     attempt_id: str = ""
-    attempt_id: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     created_timestamp: float = field(default_factory=time.time)
     monotonic_sequence: int = 1
@@ -433,7 +423,6 @@ class EvidenceManifest:
             "session_id": self.session_id,
             "attempt_id": self.attempt_id,
             "action_id": self.action_id,
-            "attempt_id": self.attempt_id,
             "created_at": self.created_at,
             "created_timestamp": self.created_timestamp,
             "monotonic_sequence": self.monotonic_sequence,

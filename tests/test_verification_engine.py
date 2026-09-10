@@ -195,19 +195,19 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.post_snapshot,
             observation_diff=self.diff_mutated,
-            target_process_info={"pid": 1234, "is_running": True},
+            target_process_info={"pid": 1234, "is_running": True, "creation_time": 1234567.89},
             execution_mode="automated",
             native_screenshot=shot_nat,
         )
 
-        self.assertEqual(verdict, VerificationVerdict.PASS)
+        print("REASON:", manifest.unverified_reason, "RATIONALE:", manifest.verdict_rationale); self.assertEqual(verdict, VerificationVerdict.PASS)
         self.assertEqual(manifest.verdict, VerificationVerdict.PASS)
         self.assertIsNone(manifest.unverified_reason)
         self.assertTrue(manifest.manifest_hash)
         self.assertGreater(len(ev_items), 0)
 
         # Create dummy file to satisfy integrity check
-        action_dir = self.store.base_dir / f"session-{self.session_id}" / f"action-{self.request.action_id}"
+        action_dir = self.store.base_dir / f"session-{self.session_id}" / f"action-{self.request.action_id}/attempt-{manifest.attempt_id}"
         action_dir.mkdir(parents=True, exist_ok=True)
         (action_dir / "s_nat.png").write_bytes(b"dummy image data")
 
@@ -342,7 +342,7 @@ class TestVerificationEngine(unittest.TestCase):
 
     def test_pid_mismatch_produces_unverified(self):
         """Proves that a PID mismatch yields UNVERIFIED."""
-        proc_info_foreign = {"pid": 9999, "process_tree": [9999], "is_running": True}
+        proc_info_foreign = {"pid": 9999, "process_tree": [9999], "is_running": True, "creation_time": 1234567.89}
 
         verdict, manifest, _ = self.verifier.evaluate_transaction(
             session_id=self.session_id,
@@ -484,7 +484,7 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.post_snapshot,
             observation_diff=self.diff_mutated,
-            target_process_info={"pid": 1234, "is_running": True},
+            target_process_info={"pid": 1234, "is_running": True, "creation_time": 1234567.89},
             execution_mode="interactive",
             user_confirmed=False,
             native_screenshot=shot_nat,
@@ -501,7 +501,7 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.post_snapshot,
             observation_diff=self.diff_mutated,
-            target_process_info={"pid": 1234, "is_running": True},
+            target_process_info={"pid": 1234, "is_running": True, "creation_time": 1234567.89},
             execution_mode="interactive",
             user_confirmed=True,
             native_screenshot=shot_nat,
@@ -594,12 +594,12 @@ class TestVerificationEngine(unittest.TestCase):
             pre_snapshot=self.pre_snapshot,
             post_snapshot=self.pre_snapshot, # same epoch to prevent has_epoch_advance
             observation_diff=diff_with_mutations,
-            target_process_info={"pid": 1234, "is_running": True},
+            target_process_info={"pid": 1234, "is_running": True, "creation_time": 1234567.89},
             execution_mode="automated",
             native_screenshot=shot_nat,
         )
         
-        self.assertEqual(verdict, VerificationVerdict.PASS)
+        print("REASON:", manifest.unverified_reason, "RATIONALE:", manifest.verdict_rationale); self.assertEqual(verdict, VerificationVerdict.PASS)
         # Verify the claim reason contains the diff_summary
         state_claim = next((c for c in manifest.claims if c.claim_type == ClaimType.ExpectedStateOccurred), None)
         self.assertIsNotNone(state_claim)
@@ -647,3 +647,7 @@ class TestVerificationEngine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+

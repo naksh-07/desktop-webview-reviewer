@@ -42,9 +42,9 @@ class TestAntigravityContractsAndSchema(unittest.TestCase):
     def test_schema_version_is_v3_or_higher(self):
         """Verifies current schema version is at least v3 (v4 for learning/governance)."""
         self.assertGreaterEqual(CURRENT_SCHEMA_VERSION, 3)
-        self.assertEqual(CURRENT_SCHEMA_VERSION, 4)
+        self.assertEqual(CURRENT_SCHEMA_VERSION, 5)
         health = self.store.get_health_report()
-        self.assertEqual(health.schema_version, 4)
+        self.assertEqual(health.schema_version, 5)
 
     def test_migration_v3_creates_all_tables_and_indices(self):
         """Verifies all 7 Antigravity correlation tables and their indexes exist in SQLite."""

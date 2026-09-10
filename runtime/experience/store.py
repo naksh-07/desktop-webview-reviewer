@@ -303,65 +303,32 @@ class ExperienceStore:
                 conn = self._get_connection()
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT id FROM action_references WHERE action_id = ? AND session_id = ? ORDER BY id DESC LIMIT 1;",
-                    (record.action_id, record.session_id),
+                    """
+                    INSERT INTO action_references (
+                        action_id, session_id, action_type, plane, target, status, duration_ms,
+                        source, source_type, kind, confidence, timestamp, iso_timestamp,
+                        evidence_reference, trace_reference, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        record.action_id,
+                        record.session_id,
+                        record.action_type,
+                        record.plane,
+                        record.target,
+                        record.status,
+                        record.duration_ms,
+                        record.provenance.source,
+                        record.provenance.source_type.value,
+                        record.provenance.kind.value,
+                        record.provenance.confidence,
+                        record.provenance.timestamp,
+                        record.provenance.iso_timestamp,
+                        record.provenance.evidence_reference,
+                        record.provenance.trace_reference,
+                        json.dumps(clean_metadata, default=str),
+                    ),
                 )
-                existing_row = cursor.fetchone()
-                if existing_row:
-                    cursor.execute(
-                        """
-                        UPDATE action_references SET
-                            action_type = ?, plane = ?, target = ?, status = ?, duration_ms = ?,
-                            source = ?, source_type = ?, kind = ?, confidence = ?, timestamp = ?,
-                            iso_timestamp = ?, evidence_reference = ?, trace_reference = ?, metadata_json = ?
-                        WHERE id = ?;
-                        """,
-                        (
-                            record.action_type,
-                            record.plane,
-                            record.target,
-                            record.status,
-                            record.duration_ms,
-                            record.provenance.source,
-                            record.provenance.source_type.value,
-                            record.provenance.kind.value,
-                            record.provenance.confidence,
-                            record.provenance.timestamp,
-                            record.provenance.iso_timestamp,
-                            record.provenance.evidence_reference,
-                            record.provenance.trace_reference,
-                            json.dumps(clean_metadata, default=str),
-                            existing_row["id"],
-                        ),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        INSERT INTO action_references (
-                            action_id, session_id, action_type, plane, target, status, duration_ms,
-                            source, source_type, kind, confidence, timestamp, iso_timestamp,
-                            evidence_reference, trace_reference, metadata_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-                        """,
-                        (
-                            record.action_id,
-                            record.session_id,
-                            record.action_type,
-                            record.plane,
-                            record.target,
-                            record.status,
-                            record.duration_ms,
-                            record.provenance.source,
-                            record.provenance.source_type.value,
-                            record.provenance.kind.value,
-                            record.provenance.confidence,
-                            record.provenance.timestamp,
-                            record.provenance.iso_timestamp,
-                            record.provenance.evidence_reference,
-                            record.provenance.trace_reference,
-                            json.dumps(clean_metadata, default=str),
-                        ),
-                    )
                 conn.commit()
                 self._last_write_iso = datetime.now(timezone.utc).isoformat()
                 return record
@@ -469,12 +436,7 @@ class ExperienceStore:
                         outcome_id, session_id, verdict, confidence, error_category,
                         source, source_type, kind, timestamp, iso_timestamp,
                         evidence_reference, trace_reference, details_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(outcome_id) DO UPDATE SET
-                        verdict = excluded.verdict,
-                        confidence = excluded.confidence,
-                        error_category = excluded.error_category,
-                        details_json = excluded.details_json;
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                     """,
                     (
                         record.outcome_id,
@@ -522,14 +484,7 @@ class ExperienceStore:
                         failure_id, session_id, mission_id, action_id, category, original_classification,
                         signature, confidence, source, source_type, kind, recovery_reference,
                         trace_reference, evidence_reference, timestamp, iso_timestamp, safe_context_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(failure_id) DO UPDATE SET
-                        category = excluded.category,
-                        original_classification = excluded.original_classification,
-                        signature = excluded.signature,
-                        confidence = excluded.confidence,
-                        recovery_reference = excluded.recovery_reference,
-                        safe_context_json = excluded.safe_context_json;
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                     """,
                     (
                         record.failure_id,
@@ -581,12 +536,7 @@ class ExperienceStore:
                         recovery_action, attempt_number, max_attempts, result, duration_ms,
                         source, source_type, kind, error, evidence_refs_json,
                         trace_event_id, timestamp, iso_timestamp, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(recovery_id) DO UPDATE SET
-                        result = excluded.result,
-                        duration_ms = excluded.duration_ms,
-                        error = excluded.error,
-                        metadata_json = excluded.metadata_json;
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                     """,
                     (
                         record.recovery_id,

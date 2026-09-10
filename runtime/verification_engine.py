@@ -95,6 +95,7 @@ class VerificationEngine:
         self._monotonic_seq += 1
         proof_lvl = required_proof_level or self.default_proof_level
         action_id = action_request.action_id
+        attempt_id = attempt_id or f"att_{uuid.uuid4().hex[:8]}"
         current_epoch = post_snapshot.epoch if post_snapshot else action_outcome.post_epoch
         pre_epoch = pre_snapshot.epoch if pre_snapshot else action_outcome.pre_epoch
 
@@ -492,6 +493,7 @@ class VerificationEngine:
             manifest_id=manifest.manifest_id,
             session_id=manifest.session_id,
             action_id=manifest.action_id,
+            attempt_id=manifest.attempt_id,
             created_at=manifest.created_at,
             created_timestamp=manifest.created_timestamp,
             monotonic_sequence=manifest.monotonic_sequence,
@@ -597,6 +599,38 @@ class VerificationEngine:
                 reason="Physical GUI visibility requirement waived by policy, but cannot certify physical reality.",
                 unverified_reason=UnverifiedReason.PHYSICAL_STATE_UNKNOWN,
             )
+
+        if physical_desktop_evidence:
+            if not getattr(physical_desktop_evidence, "is_authoritative", False):
+                return VerificationClaim(
+                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                    session_id=session_id,
+                    action_id=action_id,
+                    observation_epoch=epoch,
+                    claim_type=ClaimType.TargetWasPhysicallyVisible,
+                    expected=True,
+                    actual=False,
+                    status=VerificationVerdict.UNVERIFIED,
+                    confidence=0.0,
+                    evidence_refs=tuple(ev_refs),
+                    reason="Physical desktop evidence is not authoritative.",
+                    unverified_reason=UnverifiedReason.EVIDENCE_TAMPERED,
+                )
+            if getattr(physical_desktop_evidence, "capture_method", "") == "UNSUPPORTED":
+                return VerificationClaim(
+                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                    session_id=session_id,
+                    action_id=action_id,
+                    observation_epoch=epoch,
+                    claim_type=ClaimType.TargetWasPhysicallyVisible,
+                    expected=True,
+                    actual=False,
+                    status=VerificationVerdict.UNVERIFIED,
+                    confidence=0.0,
+                    evidence_refs=tuple(ev_refs),
+                    reason="Physical desktop evidence was captured using an unsupported method.",
+                    unverified_reason=UnverifiedReason.EVIDENCE_TAMPERED,
+                )
 
         if not native_obs:
             return VerificationClaim(
@@ -749,8 +783,23 @@ class VerificationEngine:
                     unverified_reason=UnverifiedReason.PID_MISMATCH,
                 )
                 
-            expected_creation = proc_info.get("create_time", 0.0)
-            if physical_desktop_evidence and expected_creation and physical_desktop_evidence.process_creation_time != expected_creation:
+            expected_creation = proc_info.get("creation_time", 0.0)
+            if not expected_creation or expected_creation == 0.0:
+                return VerificationClaim(
+                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                    session_id=session_id,
+                    action_id=action_id,
+                    observation_epoch=epoch,
+                    claim_type=ClaimType.TargetWasPhysicallyVisible,
+                    expected="Valid creation time",
+                    actual=expected_creation,
+                    status=VerificationVerdict.UNVERIFIED,
+                    confidence=0.0,
+                    evidence_refs=tuple(ev_refs),
+                    reason="Process creation time is missing or zero.",
+                    unverified_reason=UnverifiedReason.PROCESS_IDENTITY_MISMATCH,
+                )
+            if physical_desktop_evidence and physical_desktop_evidence.process_creation_time != expected_creation:
                 return VerificationClaim(
                     claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
                     session_id=session_id,
@@ -782,7 +831,23 @@ class VerificationEngine:
                 unverified_reason=UnverifiedReason.SCREENSHOT_UNAVAILABLE,
             )
 
-        if not physical_desktop_evidence and not (native_screenshot and getattr(native_screenshot, "is_certifying", False) and getattr(native_screenshot, "capture_method", "") == "REAL_DESKTOP_SURFACE"):
+        if physical_desktop_evidence:
+            if not getattr(physical_desktop_evidence, "is_authoritative", False) or getattr(physical_desktop_evidence, "capture_method", "") != "REAL_DESKTOP_SURFACE":
+                return VerificationClaim(
+                    claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
+                    session_id=session_id,
+                    action_id=action_id,
+                    observation_epoch=epoch,
+                    claim_type=ClaimType.TargetWasPhysicallyVisible,
+                    expected="Authoritative REAL_DESKTOP_SURFACE",
+                    actual=getattr(physical_desktop_evidence, "capture_method", "UNKNOWN"),
+                    status=VerificationVerdict.UNVERIFIED,
+                    confidence=0.0,
+                    evidence_refs=tuple(ev_refs),
+                    reason="Physical desktop evidence is forged or non-authoritative.",
+                    unverified_reason=UnverifiedReason.NON_AUTHORITATIVE_CAPTURE,
+                )
+        elif not (native_screenshot and getattr(native_screenshot, "is_certifying", False) and getattr(native_screenshot, "capture_method", "") == "REAL_DESKTOP_SURFACE"):
             return VerificationClaim(
                 claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
                 session_id=session_id,

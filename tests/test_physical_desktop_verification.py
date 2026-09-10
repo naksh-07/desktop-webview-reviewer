@@ -68,7 +68,7 @@ class TestPhysicalDesktopVerification(unittest.TestCase):
     def test_pass_valid_capture(self):
         obs = self._build_native_obs()
         ev = self._build_physical_evidence()
-        proc_info = {"pid": 456, "create_time": 100.0}
+        proc_info = {"pid": 456, "creation_time": 100.0}
         claim = self.engine._evaluate_claim_physical_visibility(
             self.session_id, self.action_id, self.epoch, obs, proc_info, [], None, ev
         )
@@ -150,7 +150,7 @@ class TestPhysicalDesktopVerification(unittest.TestCase):
     def test_fail_creation_time_mismatch(self):
         obs = self._build_native_obs()
         ev = self._build_physical_evidence(process_creation_time=200.0)
-        proc_info = {"pid": 456, "create_time": 100.0}
+        proc_info = {"pid": 456, "creation_time": 100.0}
         claim = self.engine._evaluate_claim_physical_visibility(
             self.session_id, self.action_id, self.epoch, obs, proc_info, [], None, ev
         )

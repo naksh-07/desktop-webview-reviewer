@@ -177,6 +177,7 @@ async def desktop_collect_evidence_impl(
         proc_tree = list({target_pid, window_pid}) if target_pid or window_pid else [0]
         proc_info = {
             "pid": window_pid or target_pid,
+            "create_time": session.target_process.creation_time if session.target_process else 0.0,
             "is_running": True,
             "crashed": False,
             "process_tree": proc_tree,
@@ -214,6 +215,7 @@ async def desktop_collect_evidence_impl(
 
         verdict, manifest, items = verifier.evaluate_transaction(
             session_id=session_id,
+            attempt_id=attempt_id,
             action_request=request,
             action_receipt=receipt,
             action_outcome=outcome,
@@ -224,8 +226,7 @@ async def desktop_collect_evidence_impl(
             physical_desktop_evidence=physical_desktop_evidence,
         )
 
-        # Seal cryptographic manifest to disk in EvidenceStore
-        store.store_manifest(manifest)
+        # Cryptographic manifest is already sealed to disk by VerificationEngine via EvidenceStore.
 
         verdict_str = verdict.value if hasattr(verdict, "value") else str(verdict)
         verdict_rationale = manifest.verdict_rationale or f"Automated evaluation completed with verdict {verdict_str}."

@@ -150,8 +150,8 @@ class TestExperienceIntegrationAdapter(unittest.TestCase):
 
         self.adapter.on_action_dispatched(session_id, req_mock, receipt_mock)
         actions = self.store.get_actions_for_session(session_id)
-        self.assertEqual(actions[0].status, "DISPATCHED")
-        self.assertEqual(actions[0].duration_ms, 45.2)
+        self.assertEqual(actions[-1].status, "DISPATCHED")
+        self.assertEqual(actions[-1].duration_ms, 45.2)
 
         # 3. Action Settled (Verified)
         outcome_mock = MagicMock()
@@ -163,9 +163,9 @@ class TestExperienceIntegrationAdapter(unittest.TestCase):
 
         self.adapter.on_action_settled(session_id, req_mock, receipt_mock, outcome_mock)
         actions = self.store.get_actions_for_session(session_id)
-        self.assertEqual(actions[0].status, "SETTLED")
-        self.assertEqual(actions[0].duration_ms, 180.5)
-        self.assertEqual(actions[0].provenance.evidence_reference, "man_001")
+        self.assertEqual(actions[-1].status, "SETTLED")
+        self.assertEqual(actions[-1].duration_ms, 180.5)
+        self.assertEqual(actions[-1].provenance.evidence_reference, "man_001")
 
     def test_trace_persistence_and_filtering(self):
         """Verifies canonical trace events are persisted while non-significant spam is omitted."""

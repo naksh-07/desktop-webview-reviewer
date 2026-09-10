@@ -239,7 +239,7 @@ class ActionExecutionEngine:
                     )
                 return artifact.artifact_id
         except Exception as e:
-            logger.debug(f"Screenshot capture/store for {label} skipped: {e}")
+            logger.error(f"Screenshot capture/store for {label} skipped: {e}")
         return None
 
     async def execute(

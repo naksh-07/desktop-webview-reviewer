@@ -1035,6 +1035,18 @@ class NativeOSSupervisor:
         if expected_pid is not None and pid != expected_pid:
             return False, None, "PID mismatch"
 
+        try:
+            import psutil
+            actual_creation_time = psutil.Process(pid).create_time()
+        except Exception as e:
+            return False, None, f"Failed to query OS for process creation time: {e}"
+
+        if expected_creation_time and expected_creation_time > 0.0:
+            if abs(actual_creation_time - expected_creation_time) > 1.0: # 1 second tolerance
+                return False, None, f"Process creation time mismatch. Expected {expected_creation_time}, actual {actual_creation_time}."
+        else:
+            return False, None, "expected_creation_time must be provided and > 0.0 for authoritative capture."
+
         if not w32.user32.IsWindowVisible(target_hwnd):
             return False, None, "Target window is not visible"
 
@@ -1110,7 +1122,7 @@ class NativeOSSupervisor:
             pixel_sha256=sha256_hash,
             artifact_path=output_path or "",
             action_epoch=action_epoch,
-            process_creation_time=expected_creation_time,
+            process_creation_time=actual_creation_time,
             occlusion_state=occlusion.state.value,
             occlusion_ratio=occlusion.occlusion_ratio,
             physical_bounds=(bounds_before.x, bounds_before.y, bounds_before.width, bounds_before.height),

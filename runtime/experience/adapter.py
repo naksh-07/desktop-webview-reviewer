@@ -165,7 +165,7 @@ class ExperienceIntegrationAdapter:
                 sid = str(getattr(session_state, "session_id", session_id or "default_session"))
                 target_proc = getattr(session_state, "target_process", None)
                 target_win = getattr(session_state, "target_window", None)
-                exe = target_executable or (getattr(target_proc, "executable", None) if target_proc else None)
+                exe = target_executable or (getattr(target_proc, "binary_path", None) if target_proc else None)
                 pid = target_pid if target_pid is not None else (getattr(target_proc, "pid", None) if target_proc else None)
                 target_hwnd_obj = getattr(target_win, "hwnd", None) if target_win else None
                 hwnd_val = hex(target_hwnd_obj) if isinstance(target_hwnd_obj, int) else (str(target_hwnd) if target_hwnd is not None else None)
@@ -271,7 +271,7 @@ class ExperienceIntegrationAdapter:
                 session_id=sid,
                 created_at=cat,
                 status=st,
-                target_executable=target_proc.executable if target_proc else None,
+                target_executable=target_proc.binary_path if target_proc else None,
                 target_pid=target_proc.pid if target_proc else None,
                 target_hwnd=hex(target_win.hwnd) if target_win and target_win.hwnd else None,
                 target_plane=plane,
@@ -320,7 +320,7 @@ class ExperienceIntegrationAdapter:
                 created_at=now_iso,
                 completed_at=now_iso,
                 status=status,
-                target_executable=target_proc.executable if target_proc else None,
+                target_executable=target_proc.binary_path if target_proc else None,
                 target_pid=target_proc.pid if target_proc else None,
                 target_hwnd=hex(target_win.hwnd) if target_win and target_win.hwnd else None,
                 target_plane=getattr(session_state, "active_plane", "NATIVE") if isinstance(session_state, str) else getattr(session_state.active_plane, "value", str(session_state.active_plane)),

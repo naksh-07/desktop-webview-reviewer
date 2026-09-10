@@ -58,7 +58,7 @@ class EvidenceStore:
 
     def __init__(self, base_dir: Optional[Union[str, Path]] = None):
         if base_dir is None:
-            base_dir = Path.home() / ".desktop-webview-reviewer" / "evidence"
+            base_dir = Path.home() / ".desktop_webview_reviewer" / "evidence"
         self.base_dir = Path(base_dir).resolve()
         os.makedirs(self.base_dir, exist_ok=True)
 
@@ -285,7 +285,7 @@ class EvidenceStore:
 
         if isinstance(manifest_or_path, EvidenceManifest):
             manifest = manifest_or_path
-            action_dir = self.get_action_dir(manifest.session_id, manifest.action_id, create=False)
+            action_dir = self.get_action_dir(manifest.session_id, manifest.action_id, attempt_id=getattr(manifest, "attempt_id", ""), create=False)
         else:
             p = Path(manifest_or_path).resolve()
             if p.is_dir():
