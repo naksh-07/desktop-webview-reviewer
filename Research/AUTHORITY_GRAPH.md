@@ -99,3 +99,10 @@ flowchart TD
 2. **Caller Disregard Rule:** The verifier must never trust caller-asserted flags (`is_authoritative=True`, `post_capture_validated=True`). Authority is granted solely by verified runtime origin (`REAL_DESKTOP_SURFACE` via authoritative supervisor).
 3. **Identity Coherence Rule:** Process creation time must match across discovery (`TargetManager`), capture (`NativeSupervisor`), and verification (`VerificationEngine`). Sentinel `0.0` or missing creation times must fail closed with `UNVERIFIED` (`PROCESS_IDENTITY_MISMATCH`).
 4. **Attempt Lineage Rule:** Every execution cycle must increment `attempt_id`. Evidence must be segregated into `action-{action_id}/attempt-{attempt_id}/`. Write-once immutability must forbid mutation of settled artifacts.
+
+## Phase 2D Update
+Adversarial audit confirmed that trust boundaries hold. Caller-supplied physical evidence flags are not blindly trusted. Process identity anchors successfully prevent identity recycling attacks.
+
+
+**CORRECTION**: The adversarial audit successfully bypassed the physical evidence trust boundary. The system falsely trusts caller-supplied flags on the DTO. This gate is BLOCKED.
+

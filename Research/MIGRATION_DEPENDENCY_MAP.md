@@ -77,3 +77,7 @@ Before Phase 3 can begin execution, the following foundational defects must be r
    - Deprecate and remove `RealAppCertifier` in `runtime/certification.py`.
    - Remove CLI exit code 0 synthesis in `scripts/certify.py`.
    - Unify all verification reporting under canonical `VerificationEngine` (v2.0) and sealed `EvidenceManifest`.
+
+## Phase 2D Update
+V5 Migration explicitly audited. Attempt lineage is preserved, forensic data is immutable, and destructive UPDATEs have been expunged.
+

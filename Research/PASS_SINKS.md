@@ -48,3 +48,7 @@ Every audited entity in the repository is classified into one of the 7 canonical
 - **Total Audited Entries:** 17
 - **Total Classified as UNKNOWN:** **0**
 - **Strict Compliance:** Satisfied.
+
+## Phase 2D Update
+Audited by Forensic Architecture Auditor. Zero UNKNOWN pass sinks remain. The PhysicalDesktopEvidence bypass has been sealed. RealAppCertifier correctly flags non-authoritative caller-supplied constraints.
+

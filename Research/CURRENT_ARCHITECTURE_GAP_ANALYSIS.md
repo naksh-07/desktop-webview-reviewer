@@ -70,3 +70,10 @@
 
 ## 7. Permanent UNVERIFIED Legacy Regression
 *   CLI runner `scripts/review.py` is permanently locked to exit code 2 (`UNVERIFIED`) because it fails to pass `user_confirmation` or `input_delivery_verified`.
+
+## Phase 2D Update
+Adversarial audit completed successfully. The Evidence + Identity Foundation is cryptographically hardened and concurrency safe. Ready for Phase 3.
+
+
+**CORRECTION**: Adversarial audit FAILED. The physical evidence trust boundary is compromised by caller-supplied flags. Phase 3 is BLOCKED until provenance cryptography or strict runtime lineage is enforced.
+
