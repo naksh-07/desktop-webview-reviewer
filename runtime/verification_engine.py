@@ -71,6 +71,7 @@ class VerificationEngine:
         action_request: ActionRequest,
         action_receipt: ActionReceipt,
         action_outcome: ActionOutcome,
+        attempt_id: str = "",
         pre_snapshot: Optional[DualPerspectiveSnapshot] = None,
         post_snapshot: Optional[DualPerspectiveSnapshot] = None,
         observation_diff: Optional[ObservationDiffResult] = None,
@@ -116,6 +117,7 @@ class VerificationEngine:
             epoch=action_receipt.epoch,
             source_plane=action_receipt.plane,
             source_component="ActionExecutionEngine",
+            attempt_id=attempt_id,
             integrity_hash=receipt_hash,
             metadata=action_receipt.to_dict(),
         ))
@@ -132,6 +134,7 @@ class VerificationEngine:
             epoch=action_outcome.post_epoch,
             source_plane=action_receipt.plane,
             source_component="ActionExecutionEngine",
+            attempt_id=attempt_id,
             integrity_hash=outcome_hash,
             metadata=action_outcome.to_dict(),
         ))
@@ -152,6 +155,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=TargetPlane.NATIVE_SHELL,
                 source_component="NativeSupervisor",
+                attempt_id=attempt_id,
                 integrity_hash=nat_hash,
                 metadata={
                     "hwnd": hex(native_obs.hwnd) if native_obs.hwnd else None,
@@ -179,6 +183,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=TargetPlane.WEBVIEW_DOM,
                 source_component="WebviewAutomationCore",
+                attempt_id=attempt_id,
                 integrity_hash=web_hash,
                 metadata={
                     "target_id": getattr(web_obs, "target_id", ""),
@@ -202,6 +207,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=action_receipt.plane,
                 source_component="ObservationDiffer",
+                attempt_id=attempt_id,
                 integrity_hash=diff_hash,
                 metadata=observation_diff.to_dict(),
             ))
@@ -218,6 +224,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=TargetPlane.NATIVE_SHELL,
                 source_component="WindowForensicsEngine",
+                attempt_id=attempt_id,
                 integrity_hash=native_screenshot.sha256,
                 payload_reference=native_screenshot.relative_path,
                 metadata=native_screenshot.to_dict(),
@@ -234,6 +241,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=TargetPlane.WEBVIEW_DOM,
                 source_component="CDPSession",
+                attempt_id=attempt_id,
                 integrity_hash=webview_screenshot.sha256,
                 payload_reference=webview_screenshot.relative_path,
                 metadata=webview_screenshot.to_dict(),
@@ -252,6 +260,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=TargetPlane.NATIVE_SHELL,
                 source_component="ProcessSupervisor",
+                attempt_id=attempt_id,
                 integrity_hash=proc_hash,
                 metadata=target_process_info,
             ))
@@ -296,6 +305,7 @@ class VerificationEngine:
                 epoch=current_epoch,
                 source_plane=action_receipt.plane,
                 source_component="VerificationEngine",
+                attempt_id=attempt_id,
                 integrity_hash=c_hash,
                 metadata={"description": c},
             ))
@@ -394,6 +404,7 @@ class VerificationEngine:
             session_id=session_id,
             action_id=action_id,
             relative_path="receipts/action_receipt.json",
+            attempt_id=attempt_id,
             obj=action_receipt.to_dict(),
         )
         artifacts_list.append(art_receipt)
@@ -403,6 +414,7 @@ class VerificationEngine:
             session_id=session_id,
             action_id=action_id,
             relative_path="receipts/action_outcome.json",
+            attempt_id=attempt_id,
             obj=action_outcome.to_dict(),
         )
         artifacts_list.append(art_outcome)
@@ -413,6 +425,7 @@ class VerificationEngine:
                 session_id=session_id,
                 action_id=action_id,
                 relative_path="diffs/observation_diff.json",
+                attempt_id=attempt_id,
                 obj=observation_diff.to_dict(),
             )
             artifacts_list.append(art_diff)
@@ -451,6 +464,7 @@ class VerificationEngine:
             manifest_id=f"man_{uuid.uuid4().hex[:12]}",
             session_id=session_id,
             action_id=action_id,
+            attempt_id=attempt_id,
             created_at=created_iso,
             created_timestamp=now_ts,
             monotonic_sequence=self._monotonic_seq,
@@ -736,7 +750,7 @@ class VerificationEngine:
                 )
                 
             expected_creation = proc_info.get("create_time", 0.0)
-            if physical_desktop_evidence and expected_creation and physical_desktop_evidence.process_creation_time and physical_desktop_evidence.process_creation_time != expected_creation:
+            if physical_desktop_evidence and expected_creation and physical_desktop_evidence.process_creation_time != expected_creation:
                 return VerificationClaim(
                     claim_id=f"clm_vis_{uuid.uuid4().hex[:8]}",
                     session_id=session_id,

@@ -4,6 +4,7 @@ Packages cryptographic forensic bundle and evaluates tripartite verdict (Docs 14
 """
 
 from __future__ import annotations
+import asyncio
 import base64
 import dataclasses
 import logging
@@ -53,6 +54,9 @@ async def desktop_collect_evidence_impl(
     """
     try:
         session = bridge.get_session(session_id)
+        if not hasattr(session, '_evidence_lock'):
+            session._evidence_lock = asyncio.Lock()
+        await session._evidence_lock.acquire()
         await bridge.initialize_session_engines(
             session,
             primary_hwnd=session.target_window.hwnd if session.target_window else None,
@@ -60,6 +64,7 @@ async def desktop_collect_evidence_impl(
         )
 
         evidence_id = f"ev_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        attempt_id = f"attempt_{int(time.time())}_{uuid.uuid4().hex[:4]}"
         store: EvidenceStore = session.evidence_store or EvidenceStore()
         session.evidence_store = store
 
@@ -193,7 +198,8 @@ async def desktop_collect_evidence_impl(
                     target_hwnd=target_hwnd,
                     expected_pid=window_pid or target_pid,
                     session_id=session_id,
-                    action_epoch=session.current_epoch
+                    action_epoch=session.current_epoch,
+                    expected_creation_time=session.target_process.creation_time if session.target_process else 0.0
                 )
                 if success and ev:
                     physical_desktop_evidence = ev
@@ -235,6 +241,8 @@ async def desktop_collect_evidence_impl(
         ev_id = getattr(manifest, "evidence_id", getattr(manifest, "manifest_id", "unknown"))
         resource_uri = f"desktop://evidence/{ev_id}"
 
+        if hasattr(session, '_evidence_lock') and session._evidence_lock.locked():
+            session._evidence_lock.release()
         return {
             "verdict": verdict_str,
             "verdict_rationale": verdict_rationale,
@@ -246,5 +254,7 @@ async def desktop_collect_evidence_impl(
             "thumbnail_preview_b64": thumbnail_b64,
         }
     except Exception as e:
+        if 'session' in locals() and hasattr(session, '_evidence_lock') and session._evidence_lock.locked():
+            session._evidence_lock.release()
         mcp_err = map_exception_to_mcp_error(e)
         mcp_err.raise_as_tool_error()

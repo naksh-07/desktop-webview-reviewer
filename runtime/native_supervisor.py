@@ -1012,8 +1012,8 @@ class NativeOSSupervisor:
     def capture_authoritative_physical_desktop(
         cls,
         target_hwnd: int,
+        expected_creation_time: float,
         expected_pid: Optional[int] = None,
-        expected_creation_time: Optional[float] = None,
         session_id: str = "",
         action_epoch: int = 0,
         output_path: Optional[str] = None,
@@ -1110,7 +1110,7 @@ class NativeOSSupervisor:
             pixel_sha256=sha256_hash,
             artifact_path=output_path or "",
             action_epoch=action_epoch,
-            process_creation_time=expected_creation_time or 0.0,
+            process_creation_time=expected_creation_time,
             occlusion_state=occlusion.state.value,
             occlusion_ratio=occlusion.occlusion_ratio,
             physical_bounds=(bounds_before.x, bounds_before.y, bounds_before.width, bounds_before.height),

@@ -58,7 +58,7 @@ class EvidenceStore:
 
     def __init__(self, base_dir: Optional[Union[str, Path]] = None):
         if base_dir is None:
-            base_dir = Path(os.getcwd()) / "evidence"
+            base_dir = Path.home() / ".desktop-webview-reviewer" / "evidence"
         self.base_dir = Path(base_dir).resolve()
         os.makedirs(self.base_dir, exist_ok=True)
 
@@ -75,7 +75,7 @@ class EvidenceStore:
             )
         return cleaned
 
-    def get_action_dir(self, session_id: str, action_id: str, create: bool = True) -> Path:
+    def get_action_dir(self, session_id: str, action_id: str, attempt_id: str = "", create: bool = True) -> Path:
         """
         Resolves and validates the isolated directory for a specific action transaction.
         Enforces sandboxing under self.base_dir.
@@ -83,7 +83,8 @@ class EvidenceStore:
         s_id = self._sanitize_id(session_id, "session_id")
         a_id = self._sanitize_id(action_id, "action_id")
 
-        action_path = (self.base_dir / f"session-{s_id}" / f"action-{a_id}").resolve()
+        a_path = f"action-{a_id}" if not attempt_id else f"action-{a_id}/attempt-{self._sanitize_id(attempt_id, "attempt_id")}"
+        action_path = (self.base_dir / f"session-{s_id}" / a_path).resolve()
 
         # Sandboxing check: ensure resolved path is strictly within base_dir
         try:
@@ -116,13 +117,14 @@ class EvidenceStore:
         action_id: str,
         relative_path: str,
         data: bytes,
+        attempt_id: str = "",
         mime_type: str = "application/octet-stream",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> EvidenceArtifact:
         """
         Atomically writes arbitrary bytes to an artifact path, computing exact SHA-256.
         """
-        action_dir = self.get_action_dir(session_id, action_id, create=True)
+        action_dir = self.get_action_dir(session_id, action_id, attempt_id=attempt_id, create=True)
         rel_p = self._validate_relative_path(relative_path)
         dest_path = (action_dir / rel_p).resolve()
 
@@ -147,6 +149,8 @@ class EvidenceStore:
                 f.write(data)
                 f.flush()
                 os.fsync(f.fileno())
+            if dest_path.exists():
+                raise EvidenceSecurityException(f"Cannot overwrite existing artifact: {dest_path}")
             os.replace(tmp_path, dest_path)
         except Exception:
             if tmp_path.exists():
@@ -174,6 +178,7 @@ class EvidenceStore:
         action_id: str,
         relative_path: str,
         obj: Any,
+        attempt_id: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> EvidenceArtifact:
         """Serializes and writes an object as formatted UTF-8 JSON."""
@@ -182,6 +187,7 @@ class EvidenceStore:
             session_id=session_id,
             action_id=action_id,
             relative_path=relative_path,
+            attempt_id=attempt_id,
             data=data,
             mime_type="application/json",
             metadata=metadata,
@@ -192,7 +198,7 @@ class EvidenceStore:
         Saves the authoritative manifest.json and companion checksums.sha256 file.
         Returns the absolute Path to manifest.json and the manifest hash.
         """
-        action_dir = self.get_action_dir(manifest.session_id, manifest.action_id, create=True)
+        action_dir = self.get_action_dir(manifest.session_id, manifest.action_id, attempt_id=getattr(manifest, "attempt_id", ""), create=True)
         manifest_path = action_dir / "manifest.json"
         checksums_path = action_dir / "checksums.sha256"
 
@@ -205,6 +211,8 @@ class EvidenceStore:
             f.write(manifest_bytes)
             f.flush()
             os.fsync(f.fileno())
+        if manifest_path.exists():
+            raise EvidenceSecurityException(f"Cannot overwrite existing manifest: {manifest_path}")
         os.replace(tmp_manifest, manifest_path)
 
         # Build checksums.sha256
@@ -220,6 +228,8 @@ class EvidenceStore:
             f.write(checksum_bytes)
             f.flush()
             os.fsync(f.fileno())
+        if checksums_path.exists():
+            raise EvidenceSecurityException(f"Cannot overwrite existing checksums: {checksums_path}")
         os.replace(tmp_checksum, checksums_path)
 
         return manifest_path, manifest_hash
@@ -238,9 +248,9 @@ class EvidenceStore:
 
         return EvidenceManifest.from_dict(data)
 
-    def load_artifact_bytes(self, session_id: str, action_id: str, relative_path: str) -> bytes:
+    def load_artifact_bytes(self, session_id: str, action_id: str, relative_path: str, attempt_id: str = "") -> bytes:
         """Loads raw bytes for a stored artifact after validating path safety."""
-        action_dir = self.get_action_dir(session_id, action_id, create=False)
+        action_dir = self.get_action_dir(session_id, action_id, attempt_id=attempt_id, create=False)
         rel_p = self._validate_relative_path(relative_path)
         art_path = (action_dir / rel_p).resolve()
 

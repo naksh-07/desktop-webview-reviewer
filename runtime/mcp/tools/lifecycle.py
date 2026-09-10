@@ -129,6 +129,7 @@ async def desktop_launch_impl(
                     is_cloaked=insp.is_cloaked,
                     is_minimized=insp.is_minimized,
                     is_hung=insp.is_hung,
+                    creation_time=getattr(session.target_process, "create_time", 0.0),
                 )
             except Exception:
                 session.target_window = WindowIdentity(
@@ -141,6 +142,7 @@ async def desktop_launch_impl(
                     is_cloaked=False,
                     is_minimized=False,
                     is_hung=False,
+                    creation_time=getattr(session.target_process, "create_time", 0.0),
                 )
 
         # 4. Initialize engines & discover webview if CDP port is provided
@@ -176,6 +178,7 @@ async def desktop_launch_impl(
                         is_cloaked=insp.is_cloaked,
                         is_minimized=insp.is_minimized,
                         is_hung=insp.is_hung,
+                    creation_time=getattr(session.target_process, "create_time", 0.0),
                     )
             except Exception:
                 pass
@@ -286,6 +289,7 @@ async def desktop_attach_impl(
                     is_cloaked=insp.is_cloaked,
                     is_minimized=insp.is_minimized,
                     is_hung=insp.is_hung,
+                    creation_time=getattr(session.target_process, "create_time", 0.0),
                 )
             except Exception:
                 session.target_window = WindowIdentity(
@@ -298,6 +302,7 @@ async def desktop_attach_impl(
                     is_cloaked=False,
                     is_minimized=False,
                     is_hung=False,
+                    creation_time=getattr(session.target_process, "create_time", 0.0),
                 )
 
         # Initialize engines & CDP

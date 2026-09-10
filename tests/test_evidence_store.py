@@ -109,8 +109,8 @@ class TestEvidenceStore(unittest.TestCase):
         session_id = "sess_clean"
         action_id = "act_clean"
 
-        art1 = self.store.store_bytes(session_id, action_id, "receipts/rec.json", b'{"status": "DISPATCHED"}', "application/json")
-        art2 = self.store.store_bytes(session_id, action_id, "diffs/diff.json", b'{"mutations": 1}', "application/json")
+        art1 = self.store.store_bytes(session_id, action_id, "receipts/rec.json", b'{"status": "DISPATCHED"}', mime_type="application/json")
+        art2 = self.store.store_bytes(session_id, action_id, "diffs/diff.json", b'{"mutations": 1}', mime_type="application/json")
 
         claim = VerificationClaim(
             claim_id="clm_1",

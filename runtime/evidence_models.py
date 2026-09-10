@@ -81,6 +81,24 @@ class CaptureMethod(str, Enum):
     CDP_PAGE_DIAGNOSTIC = "CDP_PAGE_DIAGNOSTIC"
 
 
+
+@dataclass(frozen=True)
+class ProcessIncarnation:
+    """Explicitly binds process identity to its exact creation time to prevent PID recycling."""
+    target_id: str
+    pid: int
+    process_creation_time: float
+    session_id: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "target_id": self.target_id,
+            "pid": self.pid,
+            "process_creation_time": self.process_creation_time,
+            "session_id": self.session_id,
+            "attempt_id": self.attempt_id,
+            }
+
 @dataclass(frozen=True)
 class PhysicalDesktopEvidence:
     evidence_id: str
@@ -94,18 +112,20 @@ class PhysicalDesktopEvidence:
     pixel_sha256: str
     artifact_path: str
     action_epoch: int = 0
+    attempt_id: str = ""
     process_creation_time: float = 0.0
     occlusion_state: str = "NOT_OCCLUDED"
     occlusion_ratio: float = 0.0
     physical_bounds: Tuple[int, int, int, int] = (0, 0, 0, 0)
     capture_method: str = "REAL_DESKTOP_SURFACE"
-    is_authoritative: bool = True
-    post_capture_validated: bool = True
+    is_authoritative: bool = False
+    post_capture_validated: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "evidence_id": self.evidence_id,
             "session_id": self.session_id,
+            "attempt_id": self.attempt_id,
             "action_epoch": self.action_epoch,
             "target_hwnd": self.target_hwnd,
             "target_pid": self.target_pid,
@@ -169,6 +189,7 @@ class EvidenceItem:
     epoch: int
     source_plane: TargetPlane
     source_component: str
+    attempt_id: str = ""
     payload_reference: Optional[str] = None
     integrity_hash: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -180,7 +201,9 @@ class EvidenceItem:
             "timestamp": self.timestamp,
             "monotonic_time": self.monotonic_time,
             "session_id": self.session_id,
+            "attempt_id": self.attempt_id,
             "action_id": self.action_id,
+            "attempt_id": self.attempt_id,
             "epoch": self.epoch,
             "source_plane": self.source_plane.value if isinstance(self.source_plane, TargetPlane) else str(self.source_plane),
             "source_component": self.source_component,
@@ -200,6 +223,7 @@ class EvidenceItem:
             monotonic_time=data.get("monotonic_time", data["timestamp"]),
             session_id=data["session_id"],
             action_id=data.get("action_id"),
+            attempt_id=data.get("attempt_id", ""),
             epoch=data.get("epoch", 0),
             source_plane=plane,
             source_component=data.get("source_component", "unknown"),
@@ -224,6 +248,13 @@ class VerificationClaim:
     actual: Any
     status: VerificationVerdict
     confidence: float
+    attempt_id: str = ""
+    claim_type: ClaimType
+    expected: Any
+    actual: Any
+    status: VerificationVerdict
+    confidence: float
+    attempt_id: str = ""
     evidence_refs: Tuple[str, ...] = field(default_factory=tuple)
     reason: str = ""
     unverified_reason: Optional[UnverifiedReason] = None
@@ -233,7 +264,9 @@ class VerificationClaim:
         return {
             "claim_id": self.claim_id,
             "session_id": self.session_id,
+            "attempt_id": self.attempt_id,
             "action_id": self.action_id,
+            "attempt_id": self.attempt_id,
             "observation_epoch": self.observation_epoch,
             "claim_type": self.claim_type.value if isinstance(self.claim_type, ClaimType) else str(self.claim_type),
             "expected": self.expected,
@@ -255,6 +288,7 @@ class VerificationClaim:
             claim_id=data["claim_id"],
             session_id=data["session_id"],
             action_id=data["action_id"],
+            attempt_id=data.get("attempt_id", ""),
             observation_epoch=data.get("observation_epoch", 0),
             claim_type=c_type,
             expected=data.get("expected"),
@@ -328,6 +362,7 @@ class ScreenshotEvidence:
     capture_method: str = "REAL_DESKTOP_SURFACE"
     is_certifying: bool = False
     session_id: Optional[str] = None
+    attempt_id: str = ""
     epoch_id: Optional[int] = None
     process_creation_time: float = 0.0
     foreground_hwnd: Optional[int] = None
@@ -350,6 +385,7 @@ class ScreenshotEvidence:
             "capture_method": self.capture_method,
             "is_certifying": self.is_certifying,
             "session_id": self.session_id,
+            "attempt_id": self.attempt_id,
             "epoch_id": self.epoch_id,
             "process_creation_time": self.process_creation_time,
             "foreground_hwnd": hex(self.foreground_hwnd) if self.foreground_hwnd else None,
@@ -366,11 +402,13 @@ class EvidenceManifest:
     manifest_id: str
     session_id: str
     action_id: str
+    attempt_id: str = ""
+    attempt_id: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     created_timestamp: float = field(default_factory=time.time)
     monotonic_sequence: int = 1
     proof_level: ProofLevel = ProofLevel.LEVEL_3_DUAL_PERSPECTIVE_PROOF
-    verdict: VerificationVerdict = VerificationVerdict.PASS
+    verdict: VerificationVerdict = VerificationVerdict.UNVERIFIED
     verdict_rationale: str = ""
     unverified_reason: Optional[UnverifiedReason] = None
     pre_state_epoch: Optional[int] = None
@@ -393,7 +431,9 @@ class EvidenceManifest:
             "manifest_version": self.manifest_version,
             "manifest_id": self.manifest_id,
             "session_id": self.session_id,
+            "attempt_id": self.attempt_id,
             "action_id": self.action_id,
+            "attempt_id": self.attempt_id,
             "created_at": self.created_at,
             "created_timestamp": self.created_timestamp,
             "monotonic_sequence": self.monotonic_sequence,
@@ -431,6 +471,7 @@ class EvidenceManifest:
             manifest_id=data["manifest_id"],
             session_id=data["session_id"],
             action_id=data["action_id"],
+            attempt_id=data.get("attempt_id", ""),
             created_at=data["created_at"],
             created_timestamp=data.get("created_timestamp", 0.0),
             monotonic_sequence=data.get("monotonic_sequence", 0),
